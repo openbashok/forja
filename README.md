@@ -8,6 +8,22 @@ Burp Suite extension that observes live proxy traffic within scope, analyzes it 
 
 **This is not a passive scanner.** Forja doesn't match signatures or run generic checks. Every tool it generates is specific to the target — the IDOR scanner knows which endpoints use sequential IDs because it saw them, the auth tester knows the exact token format because it captured it, and the PoC scripts replay real requests from the proxy history. You can also describe any tool you need in plain language and Forja will generate it with full application context.
 
+## Why a Burp Extension and Not an MCP?
+
+If you've used AI-powered security tools through MCP (Model Context Protocol), you might wonder why Forja runs inside Burp instead of as an external service. The difference is fundamental.
+
+An MCP server is a **data bridge** — it exposes predefined tools and context to an LLM, but it's stateless, sandboxed, and limited to whatever someone decided to expose. It can read some data and call some functions. That's it.
+
+A Burp extension has **full runtime access** to the application under test:
+
+- **Intercept and modify traffic in real time** — not just read it, but rewrite requests and responses as they pass through the proxy
+- **Inject code into live responses** — Forja injects generated JS scripts directly into HTML responses, turning the target's browser into an instrumentation platform
+- **Access the full Burp API** — scanner, intruder, repeater, sequencer, site map, scope control, all programmatically
+- **Generate tools that also run inside Burp** — the Jython extensions Forja creates load as first-class Burp extensions with the same privileges
+- **Persistent observation** — Forja watches every request/response continuously, building context over hours of testing
+
+An MCP gives you **windows into context**. A Burp extension **is part of the context**. Forja doesn't ask Burp for data — it lives inside Burp, sees everything the analyst sees, and builds its own understanding of the target in real time. The tools it generates aren't generic scripts that need configuration — they're pre-calibrated instruments built from live observation.
+
 ## How It Works
 
 1. **Install** — Load `forja.jar` in Burp Suite, configure your API key in the Forja tab
@@ -108,6 +124,7 @@ cd forja
 | Model | LLM model to use | claude-sonnet-4-20250514 |
 | Budget | Max USD per session (confirms before expensive calls) | $1.00 |
 | Custom Endpoint | OpenAI-compatible API URL (Custom provider only) | — |
+| Max Generation Tokens | LLM output limit for generated tools (increase if scripts truncate) | 16384 |
 | Max Traffic Entries | Endpoint limit before eviction | 500 |
 
 API keys are stored on disk via Burp's persistence preferences. They are never logged or included in exports.
