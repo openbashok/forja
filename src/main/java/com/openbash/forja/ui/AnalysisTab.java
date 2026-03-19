@@ -25,6 +25,7 @@ public class AnalysisTab extends JPanel {
     private final JTextArea detailArea;
     private final JLabel statusLabel;
     private final JButton analyzeBtn;
+    private final JProgressBar progressBar;
 
     public AnalysisTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory) {
         this.appModel = appModel;
@@ -32,31 +33,41 @@ public class AnalysisTab extends JPanel {
         this.providerFactory = providerFactory;
 
         setLayout(new BorderLayout());
+        ForjaTheme.applyTo(this);
 
         // Toolbar
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        analyzeBtn = new JButton("Analyze Traffic");
+        JPanel toolbar = ForjaTheme.toolbarBorder();
+        JPanel toolbarLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        toolbarLeft.setBackground(ForjaTheme.BG_TOOLBAR);
+
+        analyzeBtn = ForjaTheme.primaryButton("Analyze Traffic", ForjaTheme.ACCENT_ORANGE);
         analyzeBtn.addActionListener(e -> runAnalysis());
-        statusLabel = new JLabel("Ready");
-        toolbar.add(analyzeBtn);
-        toolbar.add(Box.createHorizontalStrut(10));
-        toolbar.add(statusLabel);
+
+        statusLabel = ForjaTheme.statusLabel("Ready");
+        progressBar = ForjaTheme.progressBar();
+
+        toolbarLeft.add(analyzeBtn);
+        toolbarLeft.add(Box.createHorizontalStrut(10));
+        toolbarLeft.add(statusLabel);
+        toolbarLeft.add(progressBar);
+        toolbar.add(toolbarLeft, BorderLayout.WEST);
         add(toolbar, BorderLayout.NORTH);
 
-        // Split pane
+        // Table
         tableModel = new FindingsTableModel();
         table = new JTable(tableModel);
         table.setAutoCreateRowSorter(true);
+        ForjaTheme.styleTable(table);
 
-        // Severity color renderer
+        // Severity color renderer (override the default for column 0)
         table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable t, Object value,
                     boolean sel, boolean focus, int row, int col) {
                 Component c = super.getTableCellRendererComponent(t, value, sel, focus, row, col);
-                if (value instanceof String s) {
-                    Severity sev = Severity.fromString(s);
-                    c.setForeground(sev.getColor());
+                if (!sel && value instanceof String s) {
+                    c.setBackground(row % 2 == 0 ? ForjaTheme.BG_TABLE : ForjaTheme.BG_TABLE_ALT);
+                    c.setForeground(severityColor(s));
                 }
                 return c;
             }
@@ -66,18 +77,35 @@ public class AnalysisTab extends JPanel {
             if (!e.getValueIsAdjusting()) showDetail();
         });
 
+        // Detail area
         detailArea = new JTextArea();
         detailArea.setEditable(false);
-        detailArea.setFont(UIConstants.MONO_FONT);
+        ForjaTheme.styleTextArea(detailArea);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                new JScrollPane(table), new JScrollPane(detailArea));
+        // Split pane
+        JScrollPane tableScroll = new JScrollPane(table);
+        ForjaTheme.styleScrollPane(tableScroll);
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        ForjaTheme.styleScrollPane(detailScroll);
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScroll, detailScroll);
+        ForjaTheme.styleSplitPane(split);
         split.setDividerLocation(250);
         add(split, BorderLayout.CENTER);
     }
 
     public List<Finding> getFindings() {
         return tableModel.getFindings();
+    }
+
+    private Color severityColor(String severity) {
+        return switch (severity.toUpperCase()) {
+            case "CRITICAL" -> ForjaTheme.SEV_CRITICAL;
+            case "HIGH" -> ForjaTheme.SEV_HIGH;
+            case "MEDIUM" -> ForjaTheme.SEV_MEDIUM;
+            case "LOW" -> ForjaTheme.SEV_LOW;
+            default -> ForjaTheme.SEV_INFO;
+        };
     }
 
     private void runAnalysis() {
@@ -100,6 +128,7 @@ public class AnalysisTab extends JPanel {
 
         analyzeBtn.setEnabled(false);
         statusLabel.setText("Analyzing... (est. " + costStr + ")");
+        progressBar.setVisible(true);
 
         new SwingWorker<List<Finding>, Void>() {
             @Override
@@ -110,6 +139,7 @@ public class AnalysisTab extends JPanel {
             @Override
             protected void done() {
                 analyzeBtn.setEnabled(true);
+                progressBar.setVisible(false);
                 try {
                     List<Finding> findings = get();
                     tableModel.setFindings(findings);

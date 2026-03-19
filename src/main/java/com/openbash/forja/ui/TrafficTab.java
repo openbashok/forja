@@ -24,43 +24,54 @@ public class TrafficTab extends JPanel {
         this.appModel = appModel;
         this.collector = collector;
         setLayout(new BorderLayout());
+        ForjaTheme.applyTo(this);
 
         // Toolbar
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        statsLabel = new JLabel("Endpoints: 0");
+        JPanel toolbar = ForjaTheme.toolbar();
+        statsLabel = ForjaTheme.statusLabel("Endpoints: 0");
 
-        JButton importBtn = new JButton("Import Proxy History");
+        JButton importBtn = ForjaTheme.primaryButton("Import Proxy History", ForjaTheme.ACCENT_ORANGE);
         importBtn.setToolTipText("Import already captured traffic from Burp's Proxy History (in-scope only)");
         importBtn.addActionListener(e -> importHistory(importBtn));
 
-        JButton clearBtn = new JButton("Clear");
+        JButton refreshBtn = ForjaTheme.ghostButton("Refresh");
+        refreshBtn.addActionListener(e -> refresh());
+
+        JButton clearBtn = ForjaTheme.ghostButton("Clear");
         clearBtn.addActionListener(e -> {
             appModel.clear();
             refresh();
         });
-        JButton refreshBtn = new JButton("Refresh");
-        refreshBtn.addActionListener(e -> refresh());
+
         toolbar.add(statsLabel);
-        toolbar.add(Box.createHorizontalStrut(20));
+        toolbar.add(Box.createHorizontalStrut(14));
         toolbar.add(importBtn);
         toolbar.add(refreshBtn);
         toolbar.add(clearBtn);
         add(toolbar, BorderLayout.NORTH);
 
-        // Split pane
+        // Table
         tableModel = new EndpointTableModel();
         table = new JTable(tableModel);
         table.setAutoCreateRowSorter(true);
+        ForjaTheme.styleTable(table);
         table.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) showDetail();
         });
 
+        // Detail area
         detailArea = new JTextArea();
         detailArea.setEditable(false);
-        detailArea.setFont(UIConstants.MONO_FONT);
+        ForjaTheme.styleTextArea(detailArea);
 
-        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
-                new JScrollPane(table), new JScrollPane(detailArea));
+        // Split pane
+        JScrollPane tableScroll = new JScrollPane(table);
+        ForjaTheme.styleScrollPane(tableScroll);
+        JScrollPane detailScroll = new JScrollPane(detailArea);
+        ForjaTheme.styleScrollPane(detailScroll);
+
+        JSplitPane split = new JSplitPane(JSplitPane.VERTICAL_SPLIT, tableScroll, detailScroll);
+        ForjaTheme.styleSplitPane(split);
         split.setDividerLocation(300);
         add(split, BorderLayout.CENTER);
 

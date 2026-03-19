@@ -58,81 +58,93 @@ public class ToolkitTab extends JPanel {
         this.scriptInjector = scriptInjector;
 
         setLayout(new BorderLayout());
+        ForjaTheme.applyTo(this);
 
         // Toolbar
-        JPanel toolbar = new JPanel(new BorderLayout());
-        JPanel toolbarButtons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton generateAllBtn = new JButton("Generate All Tools");
+        JPanel toolbar = ForjaTheme.toolbarBorder();
+        JPanel toolbarLeft = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        toolbarLeft.setBackground(ForjaTheme.BG_TOOLBAR);
+
+        JButton generateAllBtn = ForjaTheme.primaryButton("Generate All Tools", ForjaTheme.ACCENT_ORANGE);
         generateAllBtn.addActionListener(e -> generateAll());
-        JButton copyBtn = new JButton("Copy Code");
+
+        JButton copyBtn = ForjaTheme.ghostButton("Copy Code");
         copyBtn.addActionListener(e -> copyCode());
-        JButton saveBtn = new JButton("Save to File");
+
+        JButton saveBtn = ForjaTheme.ghostButton("Save to File");
         saveBtn.addActionListener(e -> saveToFile());
-        injectBtn = new JButton("Inject in Proxy");
+
+        injectBtn = ForjaTheme.primaryButton("Inject in Proxy", ForjaTheme.ACCENT_GREEN);
         injectBtn.setToolTipText("Inject this JS script into all in-scope HTML responses via the proxy");
         injectBtn.addActionListener(e -> toggleInject());
 
-        toolbarButtons.add(generateAllBtn);
-        toolbarButtons.add(copyBtn);
-        toolbarButtons.add(saveBtn);
-        toolbarButtons.add(Box.createHorizontalStrut(10));
-        toolbarButtons.add(injectBtn);
-        toolbar.add(toolbarButtons, BorderLayout.WEST);
+        toolbarLeft.add(generateAllBtn);
+        toolbarLeft.add(copyBtn);
+        toolbarLeft.add(saveBtn);
+        toolbarLeft.add(Box.createHorizontalStrut(8));
+        toolbarLeft.add(injectBtn);
 
-        // Status + progress bar
-        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        statusLabel = new JLabel("Ready");
-        progressBar = new JProgressBar();
-        progressBar.setIndeterminate(true);
-        progressBar.setPreferredSize(new Dimension(120, 18));
-        progressBar.setVisible(false);
-        statusPanel.add(statusLabel);
-        statusPanel.add(progressBar);
-        toolbar.add(statusPanel, BorderLayout.EAST);
+        JPanel toolbarRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
+        toolbarRight.setBackground(ForjaTheme.BG_TOOLBAR);
+        statusLabel = ForjaTheme.statusLabel("Ready");
+        progressBar = ForjaTheme.progressBar();
+        toolbarRight.add(statusLabel);
+        toolbarRight.add(progressBar);
 
+        toolbar.add(toolbarLeft, BorderLayout.WEST);
+        toolbar.add(toolbarRight, BorderLayout.EAST);
         add(toolbar, BorderLayout.NORTH);
 
         // Split pane: tool list | code preview
         toolListModel = new DefaultListModel<>();
         toolList = new JList<>(toolListModel);
         toolList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        ForjaTheme.styleList(toolList);
         toolList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) showTool();
         });
 
         codeArea = new JTextArea();
         codeArea.setEditable(false);
-        codeArea.setFont(UIConstants.MONO_FONT);
+        ForjaTheme.styleTextArea(codeArea);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                new JScrollPane(toolList), new JScrollPane(codeArea));
-        split.setDividerLocation(250);
+        JScrollPane listScroll = new JScrollPane(toolList);
+        ForjaTheme.styleScrollPane(listScroll);
+        JScrollPane codeScroll = new JScrollPane(codeArea);
+        ForjaTheme.styleScrollPane(codeScroll);
+
+        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScroll, codeScroll);
+        ForjaTheme.styleSplitPane(split);
+        split.setDividerLocation(280);
         add(split, BorderLayout.CENTER);
 
         // Prompt panel at bottom
-        JPanel promptPanel = new JPanel(new BorderLayout(UIConstants.SMALL_PAD, UIConstants.SMALL_PAD));
-        promptPanel.setBorder(BorderFactory.createTitledBorder("Generate from Prompt — describe the tool you need"));
+        JPanel promptPanel = new JPanel(new BorderLayout(4, 4));
+        promptPanel.setBackground(ForjaTheme.BG_DARK);
+        promptPanel.setBorder(ForjaTheme.sectionBorder("Generate from Prompt — describe the tool you need"));
+
         promptArea = new JTextArea(3, 60);
         promptArea.setLineWrap(true);
         promptArea.setWrapStyleWord(true);
-        promptArea.setFont(UIConstants.MONO_FONT);
+        ForjaTheme.styleTextArea(promptArea);
+        promptArea.setEditable(true);
 
         // Placeholder text
         promptArea.setText(PLACEHOLDER);
-        promptArea.setForeground(UIManager.getColor("textInactiveText"));
+        promptArea.setForeground(ForjaTheme.TEXT_MUTED);
         promptArea.addFocusListener(new FocusAdapter() {
             @Override
             public void focusGained(FocusEvent e) {
                 if (promptArea.getText().equals(PLACEHOLDER)) {
                     promptArea.setText("");
-                    promptArea.setForeground(UIConstants.textForeground());
+                    promptArea.setForeground(ForjaTheme.TEXT_DEFAULT);
                 }
             }
             @Override
             public void focusLost(FocusEvent e) {
                 if (promptArea.getText().trim().isEmpty()) {
                     promptArea.setText(PLACEHOLDER);
-                    promptArea.setForeground(UIManager.getColor("textInactiveText"));
+                    promptArea.setForeground(ForjaTheme.TEXT_MUTED);
                 }
             }
         });
@@ -151,17 +163,18 @@ public class ToolkitTab extends JPanel {
                 "PoC: CSRF attack on state-changing endpoints that lack anti-CSRF tokens"
         };
         JComboBox<String> examplesCombo = new JComboBox<>(examples);
+        ForjaTheme.styleComboBox(examplesCombo);
         examplesCombo.addActionListener(e -> {
             int idx = examplesCombo.getSelectedIndex();
             if (idx > 0) {
                 promptArea.setText((String) examplesCombo.getSelectedItem());
-                promptArea.setForeground(UIConstants.textForeground());
+                promptArea.setForeground(ForjaTheme.TEXT_DEFAULT);
                 promptArea.requestFocus();
                 examplesCombo.setSelectedIndex(0);
             }
         });
 
-        JButton promptGenBtn = new JButton("Generate");
+        JButton promptGenBtn = ForjaTheme.primaryButton("Generate", ForjaTheme.ACCENT_BLUE);
         promptGenBtn.addActionListener(e -> generateFromPrompt());
 
         // Ctrl+Enter to submit
@@ -174,13 +187,20 @@ public class ToolkitTab extends JPanel {
             }
         });
 
-        JPanel promptTopPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        promptTopPanel.add(new JLabel("Quick pick:"));
+        JPanel promptTopPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        promptTopPanel.setBackground(ForjaTheme.BG_DARK);
+        promptTopPanel.add(ForjaTheme.label("Quick pick:"));
         promptTopPanel.add(examplesCombo);
         promptPanel.add(promptTopPanel, BorderLayout.NORTH);
-        promptPanel.add(new JScrollPane(promptArea), BorderLayout.CENTER);
-        JPanel promptBtnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        promptBtnPanel.add(new JLabel("Ctrl+Enter to send"));
+
+        JScrollPane promptScroll = new JScrollPane(promptArea);
+        ForjaTheme.styleScrollPane(promptScroll);
+        promptPanel.add(promptScroll, BorderLayout.CENTER);
+
+        JPanel promptBtnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 2));
+        promptBtnPanel.setBackground(ForjaTheme.BG_DARK);
+        JLabel hint = ForjaTheme.statusLabel("Ctrl+Enter to send");
+        promptBtnPanel.add(hint);
         promptBtnPanel.add(promptGenBtn);
         promptPanel.add(promptBtnPanel, BorderLayout.SOUTH);
         add(promptPanel, BorderLayout.SOUTH);
@@ -354,8 +374,10 @@ public class ToolkitTab extends JPanel {
             String name = tool.getName() + " #" + idx;
             if (scriptInjector.isActive(name)) {
                 injectBtn.setText("Stop Injecting");
+                injectBtn.setBackground(ForjaTheme.ACCENT_RED);
             } else {
                 injectBtn.setText("Inject in Proxy");
+                injectBtn.setBackground(ForjaTheme.ACCENT_GREEN);
             }
         } else {
             injectBtn.setText("Inject (JS only)");

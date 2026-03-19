@@ -26,65 +26,89 @@ public class ConfigTab extends JPanel {
         this.config = config;
         this.providerFactory = providerFactory;
 
-        setLayout(new BorderLayout(UIConstants.PAD, UIConstants.PAD));
-        setBorder(BorderFactory.createEmptyBorder(UIConstants.PAD, UIConstants.PAD, UIConstants.PAD, UIConstants.PAD));
+        setLayout(new BorderLayout());
+        ForjaTheme.applyTo(this);
 
         // Form panel
         JPanel form = new JPanel(new GridBagLayout());
+        form.setBackground(ForjaTheme.BG_DARK);
+        form.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(UIConstants.SMALL_PAD, UIConstants.SMALL_PAD, UIConstants.SMALL_PAD, UIConstants.SMALL_PAD);
+        gbc.insets = new Insets(6, 8, 6, 8);
         gbc.anchor = GridBagConstraints.WEST;
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         int row = 0;
 
+        // Title
+        gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
+        JLabel title = ForjaTheme.titleLabel("LLM Configuration");
+        title.setFont(new Font(Font.DIALOG, Font.BOLD, 14));
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 10, 0));
+        form.add(title, gbc);
+        gbc.gridwidth = 1;
+
         // Provider
         providerCombo = new JComboBox<>(new String[]{"Anthropic", "OpenAI", "Custom"});
         providerCombo.setSelectedItem(config.getProvider());
         providerCombo.addActionListener(e -> onProviderChanged());
+        ForjaTheme.styleComboBox(providerCombo);
         addFormRow(form, gbc, row++, "Provider:", providerCombo);
 
         // API Key
         apiKeyField = new JPasswordField(40);
         apiKeyField.setText(config.getApiKey());
+        ForjaTheme.stylePasswordField(apiKeyField);
         addFormRow(form, gbc, row++, "API Key:", apiKeyField);
 
         // Model
         modelCombo = new JComboBox<>();
+        ForjaTheme.styleComboBox(modelCombo);
         addFormRow(form, gbc, row++, "Model:", modelCombo);
 
         // Budget
         budgetField = new JTextField(String.valueOf(config.getBudget()), 10);
+        ForjaTheme.styleTextField(budgetField);
         addFormRow(form, gbc, row++, "Budget (USD):", budgetField);
 
         // Max Generation Tokens
         maxTokensField = new JTextField(String.valueOf(config.getMaxGenerationTokens()), 10);
         maxTokensField.setToolTipText("Max output tokens for generated tools (default 16384). Increase if scripts are truncated. Claude supports up to 128000, OpenAI up to 16384.");
+        ForjaTheme.styleTextField(maxTokensField);
         addFormRow(form, gbc, row++, "Max Generation Tokens:", maxTokensField);
 
         // Custom endpoint
-        customEndpointLabel = new JLabel("Custom Endpoint:");
+        customEndpointLabel = ForjaTheme.label("Custom Endpoint:");
         customEndpointField = new JTextField(config.getCustomEndpoint(), 40);
+        ForjaTheme.styleTextField(customEndpointField);
         addFormRow(form, gbc, row++, customEndpointLabel, customEndpointField);
 
         // Warning
         gbc.gridx = 0; gbc.gridy = row++; gbc.gridwidth = 2;
-        JLabel warning = new JLabel("Note: API key is stored on disk via Burp preferences.");
-        warning.setFont(warning.getFont().deriveFont(Font.ITALIC, 11f));
+        JLabel warning = new JLabel("API key is stored on disk via Burp preferences.");
+        warning.setFont(ForjaTheme.FONT_UI_SMALL.deriveFont(Font.ITALIC));
+        warning.setForeground(ForjaTheme.TEXT_MUTED);
         form.add(warning, gbc);
         gbc.gridwidth = 1;
 
         add(form, BorderLayout.NORTH);
 
         // Button panel
-        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        JButton testBtn = new JButton("Test Connection");
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 10));
+        buttons.setBackground(ForjaTheme.BG_DARK);
+        buttons.setBorder(BorderFactory.createEmptyBorder(0, 14, 0, 0));
+
+        JButton testBtn = ForjaTheme.primaryButton("Test Connection", ForjaTheme.ACCENT_BLUE);
         testBtn.addActionListener(e -> testConnection());
-        JButton saveBtn = new JButton("Save");
+
+        JButton saveBtn = ForjaTheme.primaryButton("Save", ForjaTheme.ACCENT_GREEN);
         saveBtn.addActionListener(e -> save());
-        statusLabel = new JLabel(" ");
+
+        statusLabel = ForjaTheme.statusLabel(" ");
+
         buttons.add(testBtn);
         buttons.add(saveBtn);
+        buttons.add(Box.createHorizontalStrut(10));
         buttons.add(statusLabel);
         add(buttons, BorderLayout.CENTER);
 
@@ -92,7 +116,7 @@ public class ConfigTab extends JPanel {
     }
 
     private void addFormRow(JPanel panel, GridBagConstraints gbc, int row, String label, JComponent field) {
-        addFormRow(panel, gbc, row, new JLabel(label), field);
+        addFormRow(panel, gbc, row, ForjaTheme.label(label), field);
     }
 
     private void addFormRow(JPanel panel, GridBagConstraints gbc, int row, JComponent label, JComponent field) {

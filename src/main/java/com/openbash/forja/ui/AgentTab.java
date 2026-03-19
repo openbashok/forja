@@ -45,33 +45,36 @@ public class AgentTab extends JPanel {
     // Output directory for auto-saving generated files (mutable, persisted in config)
     private Path outputDir;
 
-    // Colors
-    private static final Color BG_DARK = new Color(30, 30, 30);
-    private static final Color BG_SIDEBAR = new Color(25, 25, 25);
-    private static final Color BG_INPUT = new Color(45, 45, 45);
-    private static final Color BG_TOOLBAR = new Color(38, 38, 38);
-    private static final Color BG_CODE = new Color(20, 20, 20);
-    private static final Color TEXT_DEFAULT = new Color(210, 210, 210);
+    // Colors — shared from ForjaTheme
+    private static final Color BG_DARK = ForjaTheme.BG_DARK;
+    private static final Color BG_SIDEBAR = ForjaTheme.BG_SIDEBAR;
+    private static final Color BG_INPUT = ForjaTheme.BG_INPUT;
+    private static final Color BG_TOOLBAR = ForjaTheme.BG_TOOLBAR;
+    private static final Color BG_CODE = ForjaTheme.BG_CODE;
+    private static final Color TEXT_DEFAULT = ForjaTheme.TEXT_DEFAULT;
+    private static final Color TEXT_MUTED = ForjaTheme.TEXT_MUTED;
+    private static final Color TEXT_CODE = ForjaTheme.TEXT_CODE;
+    private static final Color ACCENT_GREEN = ForjaTheme.ACCENT_GREEN;
+    private static final Color ACCENT_SEND = ForjaTheme.ACCENT_BLUE;
+    private static final Color BORDER_COLOR = ForjaTheme.BORDER_COLOR;
+    private static final Color FILE_SELECTED = ForjaTheme.BG_SELECTION;
+    private static final Color PROMPT_BG = new Color(40, 40, 40);
+    private static final Color PROMPT_HOVER = new Color(55, 55, 60);
+
+    // Chat-specific colors
     private static final Color TEXT_USER = new Color(220, 220, 255);
     private static final Color TEXT_AGENT = new Color(200, 230, 200);
     private static final Color TEXT_ACTION = new Color(130, 180, 230);
     private static final Color TEXT_ACTION_RESULT = new Color(160, 160, 160);
-    private static final Color TEXT_ERROR = new Color(255, 110, 110);
-    private static final Color TEXT_MUTED = new Color(120, 120, 120);
-    private static final Color TEXT_CODE = new Color(190, 220, 190);
-    private static final Color ACCENT_GREEN = new Color(80, 200, 120);
-    private static final Color ACCENT_SEND = new Color(100, 160, 255);
-    private static final Color BORDER_COLOR = new Color(55, 55, 55);
-    private static final Color PROMPT_BG = new Color(40, 40, 40);
-    private static final Color PROMPT_HOVER = new Color(55, 55, 60);
-    private static final Color FILE_SELECTED = new Color(50, 70, 90);
+    private static final Color TEXT_ERROR = ForjaTheme.ACCENT_RED;
 
+    // Fonts — shared from ForjaTheme
     private static final Font CHAT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 13);
     private static final Font LABEL_FONT = new Font(Font.MONOSPACED, Font.BOLD, 13);
     private static final Font INPUT_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 14);
-    private static final Font CODE_FONT = new Font(Font.MONOSPACED, Font.PLAIN, 12);
-    private static final Font SIDEBAR_FONT = new Font(Font.DIALOG, Font.PLAIN, 11);
-    private static final Font SIDEBAR_TITLE = new Font(Font.DIALOG, Font.BOLD, 11);
+    private static final Font CODE_FONT = ForjaTheme.FONT_CODE;
+    private static final Font SIDEBAR_FONT = ForjaTheme.FONT_UI_SMALL;
+    private static final Font SIDEBAR_TITLE = ForjaTheme.FONT_TITLE;
     private static final String PLACEHOLDER = "Type a command...";
 
     // Predefined prompts: {null, "CATEGORY"} for headers, {label, prompt} for actions
