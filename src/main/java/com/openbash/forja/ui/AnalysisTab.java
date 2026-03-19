@@ -98,6 +98,40 @@ public class AnalysisTab extends JPanel {
         return tableModel.getFindings();
     }
 
+    /**
+     * Run analysis programmatically (no cost confirmation dialog).
+     * Used by auto-startup on extension load.
+     */
+    public void runAnalysisAuto() {
+        if (appModel.getEndpointCount() == 0) return;
+
+        analyzeBtn.setEnabled(false);
+        statusLabel.setText("Auto-analyzing...");
+        progressBar.setVisible(true);
+
+        new SwingWorker<List<Finding>, Void>() {
+            @Override
+            protected List<Finding> doInBackground() throws Exception {
+                SecurityAnalyzer analyzer = new SecurityAnalyzer(providerFactory.create(), config);
+                return analyzer.analyze(appModel);
+            }
+
+            @Override
+            protected void done() {
+                analyzeBtn.setEnabled(true);
+                progressBar.setVisible(false);
+                try {
+                    List<Finding> findings = get();
+                    tableModel.setFindings(findings);
+                    statusLabel.setText("Auto-analysis: " + findings.size() + " finding(s).");
+                } catch (Exception e) {
+                    String msg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+                    statusLabel.setText("Auto-analysis failed: " + msg);
+                }
+            }
+        }.execute();
+    }
+
     private Color severityColor(String severity) {
         return switch (severity.toUpperCase()) {
             case "CRITICAL" -> ForjaTheme.SEV_CRITICAL;

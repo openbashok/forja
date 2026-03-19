@@ -82,6 +82,31 @@ public class ForjaExtension implements BurpExtension {
         api.scanner().registerScanCheck(new ForjaScanCheck());
 
         api.logging().logToOutput("Forja loaded successfully. Configure your API key in the Forja tab.");
+
+        // Auto-startup: import proxy history → analyze (if API key is configured)
+        if (!config.getApiKey().isEmpty()) {
+            new Thread(() -> {
+                try {
+                    // Small delay to let Burp finish initializing
+                    Thread.sleep(2000);
+
+                    // 1. Import proxy history
+                    api.logging().logToOutput("[Forja] Auto-importing proxy history...");
+                    int imported = collector.importProxyHistory();
+                    api.logging().logToOutput("[Forja] Imported " + imported + " items from proxy history.");
+
+                    if (appModel.getEndpointCount() > 0) {
+                        // 2. Run analysis on EDT
+                        api.logging().logToOutput("[Forja] Auto-starting analysis (" + appModel.getEndpointCount() + " endpoints)...");
+                        SwingUtilities.invokeLater(() -> analysisTab.runAnalysisAuto());
+                    } else {
+                        api.logging().logToOutput("[Forja] No in-scope traffic found. Analysis will run when traffic is captured.");
+                    }
+                } catch (Exception e) {
+                    api.logging().logToOutput("[Forja] Auto-startup error: " + e.getMessage());
+                }
+            }, "Forja-AutoStartup").start();
+        }
     }
 
     private JPanel buildCostBar(ConfigManager config) {
