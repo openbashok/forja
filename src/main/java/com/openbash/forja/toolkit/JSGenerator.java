@@ -21,7 +21,8 @@ public class JSGenerator {
     }
 
     public GeneratedTool generate(AppModel appModel, List<Finding> findings, String toolType) throws LLMException {
-        String systemPrompt = loadPrompt("prompts/js_generator.txt");
+        String promptFile = "object-sniffer".equals(toolType) ? "prompts/js_sniffer.txt" : "prompts/js_generator.txt";
+        String systemPrompt = loadPrompt(promptFile);
 
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("Generate a ").append(toolType).append(" JavaScript script.\n\n");

@@ -35,8 +35,9 @@ public class ToolkitGenerator {
         boolean hasCritOrHigh = findings.stream()
                 .anyMatch(f -> f.getSeverity() == Severity.CRITICAL || f.getSeverity() == Severity.HIGH);
 
-        // Always generate a traffic sniffer
+        // Always generate a traffic sniffer and object sniffer
         tools.add(jsGen.generate(appModel, findings, "traffic-sniffer"));
+        tools.add(jsGen.generate(appModel, findings, "object-sniffer"));
 
         // Generate PoC for critical/high findings
         if (hasCritOrHigh) {
@@ -112,11 +113,12 @@ public class ToolkitGenerator {
                 + "- Generate exactly what the user asks for\n"
                 + "- Use real endpoints, parameters, and patterns from the application context\n"
                 + "- For JavaScript: use modern ES6+ with fetch API, runnable in browser console.\n"
-                + "  IMPORTANT: Every JS script MUST create a visible floating panel overlay so the analyst can see results.\n"
-                + "  Create a fixed-position panel (bottom-right, dark background #1a1a2e, green text #0f0, z-index:999999)\n"
-                + "  with a header showing the tool name and a scrollable log area. Define a forjaLog(msg,color) function\n"
-                + "  that appends timestamped lines to the panel. Use it throughout to show status and findings.\n"
-                + "  Keep code concise (under 150 lines).\n"
+                + "  IMPORTANT: Every JS script MUST create a visible floating panel overlay (Burp Suite dark style).\n"
+                + "  Panel: position:fixed, background:#2b2b2b, color:#d4d4d4, border:1px solid #555, z-index:999999.\n"
+                + "  Title bar: background:#3c3f41, draggable, with 'Forja' in orange (#e8a238) + tool name, minimize/close buttons.\n"
+                + "  Implement real drag (mousedown/mousemove), resize:both CSS, status bar at bottom.\n"
+                + "  Use forjaLog(msg,type) with types: info=#8acdff, success=#6a9955, warn=#e8a238, error=#f44747.\n"
+                + "  Keep code concise (under 200 lines).\n"
                 + "- For Burp extensions: use Jython with the legacy Burp API (IBurpExtender, IHttpListener, etc.). "
                 + "NEVER generate Java Burp extensions — Jython .py files load directly in Burp without compilation. "
                 + "CRITICAL: Jython is PYTHON 2.7 — use print as statement (print \"msg\"), "
