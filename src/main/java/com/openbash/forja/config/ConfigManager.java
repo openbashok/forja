@@ -63,6 +63,20 @@ public class ConfigManager {
         setString("budget", String.valueOf(budget));
     }
 
+    // Max generation tokens (LLM output limit for generated tools)
+    public int getMaxGenerationTokens() {
+        String val = getString("maxGenerationTokens", "16384");
+        try {
+            return Integer.parseInt(val);
+        } catch (NumberFormatException e) {
+            return 16384;
+        }
+    }
+
+    public void setMaxGenerationTokens(int max) {
+        setString("maxGenerationTokens", String.valueOf(max));
+    }
+
     // Max traffic entries
     public int getMaxTrafficEntries() {
         String val = getString("maxTrafficEntries", "500");

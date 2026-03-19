@@ -120,8 +120,9 @@ public class AnthropicProvider implements LLMProvider {
             int inputTokens = usage.get("input_tokens").getAsInt();
             int outputTokens = usage.get("output_tokens").getAsInt();
             String model = json.get("model").getAsString();
+            String stopReason = json.has("stop_reason") ? json.get("stop_reason").getAsString() : "end_turn";
 
-            return new LLMResponse(content, inputTokens, outputTokens, model);
+            return new LLMResponse(content, inputTokens, outputTokens, model, stopReason);
         } catch (IOException e) {
             throw new LLMException("Network error: " + e.getMessage(), 0, e);
         }

@@ -17,6 +17,7 @@ public class ConfigTab extends JPanel {
     private final JPasswordField apiKeyField;
     private final JComboBox<String> modelCombo;
     private final JTextField budgetField;
+    private final JTextField maxTokensField;
     private final JTextField customEndpointField;
     private final JLabel customEndpointLabel;
     private final JLabel statusLabel;
@@ -55,6 +56,11 @@ public class ConfigTab extends JPanel {
         // Budget
         budgetField = new JTextField(String.valueOf(config.getBudget()), 10);
         addFormRow(form, gbc, row++, "Budget (USD):", budgetField);
+
+        // Max Generation Tokens
+        maxTokensField = new JTextField(String.valueOf(config.getMaxGenerationTokens()), 10);
+        maxTokensField.setToolTipText("Max output tokens for generated tools (default 16384). Increase if scripts are truncated. Claude supports up to 128000, OpenAI up to 16384.");
+        addFormRow(form, gbc, row++, "Max Generation Tokens:", maxTokensField);
 
         // Custom endpoint
         customEndpointLabel = new JLabel("Custom Endpoint:");
@@ -132,6 +138,12 @@ public class ConfigTab extends JPanel {
             config.setBudget(Double.parseDouble(budgetField.getText().trim()));
         } catch (NumberFormatException e) {
             config.setBudget(1.0);
+        }
+        try {
+            int tokens = Integer.parseInt(maxTokensField.getText().trim());
+            config.setMaxGenerationTokens(Math.max(1024, tokens));
+        } catch (NumberFormatException e) {
+            config.setMaxGenerationTokens(16384);
         }
         statusLabel.setText("Configuration saved.");
     }

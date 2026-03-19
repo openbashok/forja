@@ -58,14 +58,18 @@ public class BurpPluginGenerator {
         LLMResponse response = provider.chat(
                 List.of(Message.system(systemPrompt), Message.user(userPrompt.toString())),
                 config.getModel(),
-                8192
+                config.getMaxGenerationTokens()
         );
 
         String code = extractCode(response.getContent());
+        String description = "Jython Burp extension: " + toolType + " (load as .py in Burp > Extensions)";
+        if (response.isTruncated()) {
+            description = "⚠ TRUNCATED (hit " + response.getOutputTokens() + " token limit — increase Max Generation Tokens in Config) — " + description;
+        }
         return new GeneratedTool(
                 toolType + " Extension",
                 GeneratedTool.ToolType.BURP_EXTENSION,
-                "Jython Burp extension: " + toolType + " (load as .py in Burp > Extensions)",
+                description,
                 code,
                 "python"
         );

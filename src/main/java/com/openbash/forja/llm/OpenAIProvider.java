@@ -113,7 +113,18 @@ public class OpenAIProvider implements LLMProvider {
             int outputTokens = usage.get("completion_tokens").getAsInt();
             String model = json.get("model").getAsString();
 
-            return new LLMResponse(content, inputTokens, outputTokens, model);
+            // OpenAI uses "finish_reason" in choices, "length" means truncated
+            String stopReason = "end_turn";
+            try {
+                String finishReason = json.getAsJsonArray("choices")
+                        .get(0).getAsJsonObject()
+                        .get("finish_reason").getAsString();
+                if ("length".equals(finishReason)) {
+                    stopReason = "max_tokens";
+                }
+            } catch (Exception ignored) {}
+
+            return new LLMResponse(content, inputTokens, outputTokens, model, stopReason);
         } catch (IOException e) {
             throw new LLMException("Network error: " + e.getMessage(), 0, e);
         }

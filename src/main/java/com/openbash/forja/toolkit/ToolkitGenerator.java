@@ -133,13 +133,16 @@ public class ToolkitGenerator {
         LLMResponse response = provider.chat(
                 List.of(Message.system(systemPrompt), Message.user(prompt.toString())),
                 config.getModel(),
-                8192
+                config.getMaxGenerationTokens()
         );
 
         String content = response.getContent();
         String code = extractCode(content);
         String language = detectLanguage(content);
         String description = extractDescription(content);
+        if (response.isTruncated()) {
+            description = "⚠ TRUNCATED (hit " + response.getOutputTokens() + " token limit — increase Max Generation Tokens in Config) — " + description;
+        }
 
         GeneratedTool.ToolType toolType;
         if (content.contains("IBurpExtender") || content.contains("registerExtenderCallbacks")) {

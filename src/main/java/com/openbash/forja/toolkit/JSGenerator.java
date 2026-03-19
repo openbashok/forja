@@ -50,14 +50,18 @@ public class JSGenerator {
         LLMResponse response = provider.chat(
                 List.of(Message.system(systemPrompt), Message.user(userPrompt.toString())),
                 config.getModel(),
-                8192
+                config.getMaxGenerationTokens()
         );
 
         String code = extractCode(response.getContent());
+        String description = "Auto-generated " + toolType + " script based on observed traffic";
+        if (response.isTruncated()) {
+            description = "⚠ TRUNCATED (hit " + response.getOutputTokens() + " token limit — increase Max Generation Tokens in Config) — " + description;
+        }
         return new GeneratedTool(
                 toolType + " Script",
                 GeneratedTool.ToolType.JS_SCRIPT,
-                "Auto-generated " + toolType + " script based on observed traffic",
+                description,
                 code,
                 "javascript"
         );
