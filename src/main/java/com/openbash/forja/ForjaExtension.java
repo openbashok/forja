@@ -5,6 +5,7 @@ import burp.api.montoya.MontoyaApi;
 import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.integration.ForjaContextMenu;
 import com.openbash.forja.integration.ForjaScanCheck;
+import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.traffic.TrafficCollector;
@@ -30,11 +31,15 @@ public class ForjaExtension implements BurpExtension {
         api.proxy().registerRequestHandler(collector);
         api.proxy().registerResponseHandler(collector);
 
+        // Script injector (modifies proxy responses to inject JS)
+        ScriptInjector scriptInjector = new ScriptInjector(api);
+        api.proxy().registerResponseHandler(scriptInjector);
+
         // UI tabs
         ConfigTab configTab = new ConfigTab(config, providerFactory);
         TrafficTab trafficTab = new TrafficTab(appModel, collector);
         AnalysisTab analysisTab = new AnalysisTab(appModel, config, providerFactory);
-        ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, analysisTab::getFindings);
+        ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, analysisTab::getFindings, scriptInjector);
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Config", configTab);

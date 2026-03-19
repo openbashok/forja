@@ -2,6 +2,7 @@ package com.openbash.forja.ui;
 
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.toolkit.GeneratedTool;
 import com.openbash.forja.toolkit.ToolkitGenerator;
@@ -25,6 +26,7 @@ public class ToolkitTab extends JPanel {
     private final ConfigManager config;
     private final LLMProviderFactory providerFactory;
     private final Supplier<List<Finding>> findingsSupplier;
+    private final ScriptInjector scriptInjector;
 
     private final DefaultListModel<String> toolListModel;
     private final JList<String> toolList;
@@ -32,6 +34,7 @@ public class ToolkitTab extends JPanel {
     private final JTextArea promptArea;
     private final JLabel statusLabel;
     private final JProgressBar progressBar;
+    private final JButton injectBtn;
     private final List<GeneratedTool> tools = new ArrayList<>();
 
     private Timer progressTimer;
@@ -45,11 +48,12 @@ public class ToolkitTab extends JPanel {
             + "  - Generate a fuzzer for all query parameters using SQLi and XSS payloads";
 
     public ToolkitTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory,
-                      Supplier<List<Finding>> findingsSupplier) {
+                      Supplier<List<Finding>> findingsSupplier, ScriptInjector scriptInjector) {
         this.appModel = appModel;
         this.config = config;
         this.providerFactory = providerFactory;
         this.findingsSupplier = findingsSupplier;
+        this.scriptInjector = scriptInjector;
 
         setLayout(new BorderLayout());
 
@@ -62,10 +66,15 @@ public class ToolkitTab extends JPanel {
         copyBtn.addActionListener(e -> copyCode());
         JButton saveBtn = new JButton("Save to File");
         saveBtn.addActionListener(e -> saveToFile());
+        injectBtn = new JButton("Inject in Proxy");
+        injectBtn.setToolTipText("Inject this JS script into all in-scope HTML responses via the proxy");
+        injectBtn.addActionListener(e -> toggleInject());
 
         toolbarButtons.add(generateAllBtn);
         toolbarButtons.add(copyBtn);
         toolbarButtons.add(saveBtn);
+        toolbarButtons.add(Box.createHorizontalStrut(10));
+        toolbarButtons.add(injectBtn);
         toolbar.add(toolbarButtons, BorderLayout.WEST);
 
         // Status + progress bar
@@ -277,6 +286,64 @@ public class ToolkitTab extends JPanel {
         toolList.setSelectedIndex(tools.size() - 1);
     }
 
+    private void toggleInject() {
+        int idx = toolList.getSelectedIndex();
+        if (idx < 0 || idx >= tools.size()) return;
+        GeneratedTool tool = tools.get(idx);
+
+        if (!"javascript".equals(tool.getLanguage())) {
+            statusLabel.setText("Injection only works with JavaScript scripts.");
+            return;
+        }
+
+        String name = tool.getName() + " #" + idx;
+        if (scriptInjector.isActive(name)) {
+            scriptInjector.deactivate(name);
+            statusLabel.setText("Stopped injecting '" + tool.getName() + "'. Active: " + scriptInjector.activeCount());
+        } else {
+            scriptInjector.activate(name, tool.getCode());
+            statusLabel.setText("Injecting '" + tool.getName() + "' into proxy responses. Active: " + scriptInjector.activeCount());
+        }
+        updateInjectButton();
+        refreshListLabels();
+    }
+
+    private void updateInjectButton() {
+        int idx = toolList.getSelectedIndex();
+        if (idx < 0 || idx >= tools.size()) {
+            injectBtn.setText("Inject in Proxy");
+            injectBtn.setEnabled(false);
+            return;
+        }
+        GeneratedTool tool = tools.get(idx);
+        boolean isJs = "javascript".equals(tool.getLanguage());
+        injectBtn.setEnabled(isJs);
+
+        if (isJs) {
+            String name = tool.getName() + " #" + idx;
+            if (scriptInjector.isActive(name)) {
+                injectBtn.setText("Stop Injecting");
+            } else {
+                injectBtn.setText("Inject in Proxy");
+            }
+        } else {
+            injectBtn.setText("Inject (JS only)");
+        }
+    }
+
+    private void refreshListLabels() {
+        for (int i = 0; i < tools.size(); i++) {
+            GeneratedTool t = tools.get(i);
+            String name = t.getName() + " #" + i;
+            String prefix = scriptInjector.isActive(name) ? "[INJECTING] " : "";
+            String label = prefix + "[" + t.getType().getDisplayName() + "] " + t.getName();
+            if (!t.getDescription().isEmpty() && !t.getDescription().equals(t.getName())) {
+                label += " — " + truncate(t.getDescription(), 50);
+            }
+            toolListModel.set(i, label);
+        }
+    }
+
     private void showTool() {
         int idx = toolList.getSelectedIndex();
         if (idx < 0 || idx >= tools.size()) return;
@@ -287,10 +354,17 @@ public class ToolkitTab extends JPanel {
         header.append(commentPrefix).append(tool.getName()).append("\n");
         header.append(commentPrefix).append(tool.getDescription()).append("\n");
         header.append(commentPrefix).append("Language: ").append(tool.getLanguage()).append("\n");
-        header.append(commentPrefix).append("Generated: ").append(tool.getGeneratedAt()).append("\n\n");
+        header.append(commentPrefix).append("Generated: ").append(tool.getGeneratedAt()).append("\n");
+
+        String name = tool.getName() + " #" + idx;
+        if ("javascript".equals(tool.getLanguage()) && scriptInjector.isActive(name)) {
+            header.append(commentPrefix).append("STATUS: INJECTING into proxy responses\n");
+        }
+        header.append("\n");
 
         codeArea.setText(header + tool.getCode());
         codeArea.setCaretPosition(0);
+        updateInjectButton();
     }
 
     private void copyCode() {
