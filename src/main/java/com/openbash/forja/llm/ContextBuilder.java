@@ -39,6 +39,11 @@ public class ContextBuilder {
             appModel.getInterestingPatterns().forEach(p -> sb.append("- ").append(p).append("\n"));
         }
 
+        // JavaScript sources summary
+        if (!appModel.getJsSources().isEmpty()) {
+            sb.append("\nJavaScript files captured: ").append(appModel.getJsSources().size()).append("\n");
+        }
+
         // Endpoints prioritized: auth > params > frequency
         sb.append("\n## Endpoints\n\n");
         List<EndpointInfo> endpoints = new ArrayList<>(appModel.getEndpoints().values());

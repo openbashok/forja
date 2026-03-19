@@ -15,6 +15,10 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
 
     private static final Pattern STATIC_ASSET = Pattern.compile(
             "\\.(css|js|png|jpg|jpeg|gif|ico|svg|woff2?|ttf|eot|map)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JS_FILE = Pattern.compile("\\.js(\\?.*)?$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SCRIPT_TAG = Pattern.compile(
+            "<script[^>]*>([\\s\\S]*?)</script>", Pattern.CASE_INSENSITIVE);
+    private static final int MIN_INLINE_JS_LENGTH = 100; // Skip trivial inline scripts
     private static final Pattern NUMERIC_SEGMENT = Pattern.compile("^\\d+$");
     private static final Pattern UUID_SEGMENT = Pattern.compile(
             "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", Pattern.CASE_INSENSITIVE);
@@ -59,6 +63,10 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         String url = request.url();
 
         if (!api.scope().isInScope(url)) return;
+
+        // Capture JavaScript source code before filtering static assets
+        captureJavaScript(url, response);
+
         if (isStaticAsset(url)) return;
 
         String method = request.method();
@@ -161,6 +169,9 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
     }
 
     private void processHistoryItem(HttpRequest request, HttpResponse response, String url) {
+        // Capture JavaScript source code before filtering
+        captureJavaScriptFromHistory(url, response);
+
         String method = request.method();
         String path = extractPath(url);
         String pathPattern = normalizePath(path);
@@ -270,5 +281,69 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
     private String truncate(String s, int maxLen) {
         if (s == null) return null;
         return s.length() <= maxLen ? s : s.substring(0, maxLen) + "\n[truncated]";
+    }
+
+    /**
+     * Capture JavaScript from proxy responses:
+     * - Standalone .js files (Content-Type: javascript)
+     * - Inline &lt;script&gt; blocks from HTML responses
+     */
+    private void captureJavaScript(InterceptedResponse response) {
+        try {
+            String url = response.initiatingRequest().url();
+            captureJavaScript(url, response);
+        } catch (Exception ignored) {}
+    }
+
+    private void captureJavaScript(String url, InterceptedResponse response) {
+        try {
+            String ct = response.headerValue("Content-Type");
+            if (ct == null) return;
+            String ctLower = ct.toLowerCase();
+
+            String body = response.bodyToString();
+            if (body == null || body.isBlank()) return;
+
+            if (ctLower.contains("javascript")) {
+                // Standalone JS file
+                appModel.addJsSource(url, body);
+            } else if (ctLower.contains("html")) {
+                // Extract inline <script> blocks from HTML
+                extractInlineScripts(url, body);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void captureJavaScriptFromHistory(String url, HttpResponse response) {
+        try {
+            String ct = response.headerValue("Content-Type");
+            if (ct == null) return;
+            String ctLower = ct.toLowerCase();
+
+            String body = response.bodyToString();
+            if (body == null || body.isBlank()) return;
+
+            if (ctLower.contains("javascript")) {
+                appModel.addJsSource(url, body);
+            } else if (ctLower.contains("html")) {
+                extractInlineScripts(url, body);
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void extractInlineScripts(String pageUrl, String html) {
+        var matcher = SCRIPT_TAG.matcher(html);
+        int index = 0;
+        while (matcher.find()) {
+            String script = matcher.group(1).trim();
+            if (script.length() >= MIN_INLINE_JS_LENGTH) {
+                // Skip scripts that are just src= references (empty body with src attribute)
+                String tag = matcher.group(0);
+                if (tag.contains(" src=") && script.isEmpty()) continue;
+
+                appModel.addJsSource(pageUrl + "#inline-" + index, script);
+                index++;
+            }
+        }
     }
 }

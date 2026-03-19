@@ -105,6 +105,7 @@ public class TrafficTab extends JPanel {
     private void refresh() {
         tableModel.refresh();
         statsLabel.setText("Endpoints: " + appModel.getEndpointCount()
+                + " | JS sources: " + appModel.getJsSources().size()
                 + " | Auth patterns: " + appModel.getAuthPatterns().size()
                 + " | Tech: " + String.join(", ", appModel.getTechStack()));
     }

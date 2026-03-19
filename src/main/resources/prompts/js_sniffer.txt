@@ -1,61 +1,41 @@
-You are a security tool developer. Generate a JavaScript Object Sniffer — a runtime instrumentation script that intercepts, monitors, and logs all interesting JavaScript objects, variables, API calls, and data flows in a web application.
+You are a security tool developer. Generate a JavaScript Object Sniffer — a TARGETED runtime instrumentation script built from analysis of the application's ACTUAL source code.
 
-This is Forja's most important analysis tool. It gives the penetration tester X-ray vision into the application's runtime behavior.
+## CRITICAL: Source Code Analysis First
 
-## What the Sniffer MUST Monitor
+You will receive the application's real JavaScript source code captured from proxy traffic. Before writing any code, ANALYZE IT to identify:
 
-### 1. Global Variables & Objects
-- Enumerate all non-default properties on `window` (compare against a baseline of standard browser globals)
-- For each custom global: log its name, type, and a preview of its value
-- Use `Object.defineProperty()` to watch for changes on interesting globals (those containing tokens, keys, user data, config)
-- Watch for new globals being added using a periodic scan or Proxy on window
+1. **Application-specific globals** — What custom variables does the app define on `window`? What namespaces (e.g., `window.App`, `window.__CONFIG__`, `window.__NEXT_DATA__`)? What state management (Redux store, Vuex, MobX)?
+2. **API call patterns** — Does the app use `fetch`, `axios`, `$.ajax`, a custom API client? What base URLs? What auth headers does it attach? What interceptors exist?
+3. **Storage usage** — What specific localStorage/sessionStorage keys does the app read/write? What data format (JSON, tokens, flags)?
+4. **Authentication flow** — How does the app store and send tokens? JWT in localStorage? Session cookies? CSRF tokens in meta tags or headers?
+5. **Frameworks & libraries** — React state? Angular services? Vue reactivity? What router is used?
+6. **Sensitive data handling** — Where does the app process passwords, tokens, PII? What functions handle auth?
+7. **Event systems** — Custom event buses? postMessage usage? WebSocket connections?
 
-### 2. Storage Operations
-- Monkeypatch `Storage.prototype.setItem` and `Storage.prototype.getItem` and `Storage.prototype.removeItem`
-- Log every localStorage/sessionStorage operation: key, value, operation type
-- Flag sensitive-looking keys: token, session, auth, key, secret, password, user, jwt, csrf, api
+## What the Sniffer Should Monitor
 
-### 3. Cookie Operations
-- Hook `document.cookie` setter using Object.defineProperty on Document.prototype
-- Log every cookie write: name, value, flags
-- Flag cookies without Secure/HttpOnly/SameSite attributes (when visible from JS)
+Based on your source code analysis, generate hooks that target the APPLICATION'S SPECIFIC patterns. DO NOT generate generic catch-all hooks that produce noise.
 
-### 4. Network Calls (fetch + XHR)
-- Monkeypatch `window.fetch` — log method, URL, headers (especially Authorization, X-API-Key, Cookie), request body, response status, content-type
-- Monkeypatch `XMLHttpRequest.prototype.open` and `.send` — same details
-- If jQuery is present, also hook `$.ajax`
-- If axios is present, add request/response interceptors
-- Flag requests containing tokens, credentials, or sensitive data in URL params or body
-- Show response body preview for JSON responses (first 500 chars)
+### Prioritize by what the app actually does:
+- If the app uses `fetch` with an auth header → hook `fetch` and highlight that specific header
+- If the app stores JWT in `localStorage.token` → watch that SPECIFIC key, not all of localStorage
+- If the app has `window.__STORE__` → monitor that object's mutations
+- If the app uses `axios` → add axios interceptors instead of generic fetch hooks
+- If the app uses WebSockets → hook the WebSocket, don't waste time on postMessage it doesn't use
 
-### 5. Form Submissions
-- Hook all form submit events with addEventListener on document
-- Log: form action, method, all field names and values (especially password fields, hidden inputs)
-- Flag forms without CSRF tokens
-
-### 6. postMessage / Cross-Origin Communication
-- Hook `window.addEventListener('message', ...)` and `window.postMessage`
-- Log: origin, data payload, target origin
-- Flag messages accepted from wildcard origins ('*')
-
-### 7. DOM Mutations on Sensitive Elements
-- Use MutationObserver on document.body to watch for:
-  - New hidden input fields (type="hidden") with token-like names
-  - Password fields being populated programmatically
-  - Elements with data attributes containing tokens or keys
-  - Script tags being dynamically added
-
-### 8. Eval and Dynamic Code
-- Hook `eval()`, `new Function()`, `setTimeout(string)`, `setInterval(string)`
-- Log the code being dynamically evaluated (truncated to 200 chars)
-- Flag as potential security risk
+### Smart filtering:
+- ONLY monitor globals that are application-defined (not browser defaults)
+- ONLY hook the HTTP client the app actually uses
+- ONLY watch storage keys the app uses
+- IGNORE frameworks' internal state — focus on application state
+- IGNORE third-party analytics/tracking calls
+- Categorize events by security relevance: auth flows > data exposure > API calls > state changes
 
 ## Sniffer UI
 
-Use the standard Forja panel (Burp Suite style) with these additions:
+Use the standard Forja panel (Burp Suite dark style):
 
 ```javascript
-// Forja Object Sniffer panel
 (function() {
   if (document.getElementById('forja-panel')) {
     document.getElementById('forja-panel').style.display = 'block';
@@ -70,7 +50,6 @@ Use the standard Forja panel (Burp Suite style) with these additions:
     'box-shadow:0 4px 24px rgba(0,0,0,0.6);display:flex;flex-direction:column;' +
     'resize:both;min-width:400px;min-height:250px;';
 
-  // Title bar
   const titleBar = document.createElement('div');
   titleBar.style.cssText = 'padding:6px 10px;background:#3c3f41;color:#bbb;font-weight:bold;font-size:12px;' +
     'cursor:move;display:flex;justify-content:space-between;align-items:center;' +
@@ -80,7 +59,6 @@ Use the standard Forja panel (Burp Suite style) with these additions:
   const controls = document.createElement('span');
   controls.style.cssText = 'display:flex;gap:8px;align-items:center;';
 
-  // Event counter badge
   const badge = document.createElement('span');
   badge.id = 'forja-badge';
   badge.style.cssText = 'background:#e8a238;color:#1e1e1e;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:bold;';
@@ -112,7 +90,6 @@ Use the standard Forja panel (Burp Suite style) with these additions:
   titleBar.appendChild(controls);
   panel.appendChild(titleBar);
 
-  // Drag
   let isDragging = false, dragX = 0, dragY = 0;
   titleBar.addEventListener('mousedown', (e) => {
     if (e.target === closeBtn || e.target === minBtn) return;
@@ -130,159 +107,52 @@ Use the standard Forja panel (Burp Suite style) with these additions:
     panel.style.bottom = 'auto';
   }
 
-  // Tab bar for filtering by category
+  // Use tab categories based on what the app actually does — adjust tab names to match
   const tabBar = document.createElement('div');
   tabBar.style.cssText = 'display:flex;background:#333;border-bottom:1px solid #444;flex-shrink:0;overflow-x:auto;';
-  const tabs = ['All', 'Globals', 'Network', 'Storage', 'Cookies', 'Forms', 'PostMsg', 'DOM', 'Eval'];
-  let activeTab = 'All';
-  tabs.forEach(t => {
-    const tab = document.createElement('span');
-    tab.textContent = t;
-    tab.dataset.tab = t;
-    tab.style.cssText = 'padding:4px 10px;cursor:pointer;font-size:11px;color:#888;border-bottom:2px solid transparent;';
-    if (t === 'All') { tab.style.color = '#e8a238'; tab.style.borderBottomColor = '#e8a238'; }
-    tab.onclick = () => {
-      activeTab = t;
-      tabBar.querySelectorAll('span').forEach(s => { s.style.color = '#888'; s.style.borderBottomColor = 'transparent'; });
-      tab.style.color = '#e8a238';
-      tab.style.borderBottomColor = '#e8a238';
-      filterLog();
-    };
-    tabBar.appendChild(tab);
-  });
-  panel.appendChild(tabBar);
 
-  // Toolbar
-  const toolbar = document.createElement('div');
-  toolbar.style.cssText = 'padding:3px 8px;background:#333;border-bottom:1px solid #444;display:flex;gap:6px;flex-shrink:0;align-items:center;';
-
-  const pauseBtn = document.createElement('button');
-  pauseBtn.textContent = 'Pause';
-  pauseBtn.style.cssText = 'background:#555;color:#d4d4d4;border:1px solid #666;padding:2px 10px;border-radius:3px;cursor:pointer;font-size:11px;';
-  let paused = false;
-  pauseBtn.onclick = () => { paused = !paused; pauseBtn.textContent = paused ? 'Resume' : 'Pause'; pauseBtn.style.background = paused ? '#e8a238' : '#555'; pauseBtn.style.color = paused ? '#1e1e1e' : '#d4d4d4'; };
-
-  const clearBtn = document.createElement('button');
-  clearBtn.textContent = 'Clear';
-  clearBtn.style.cssText = 'background:#555;color:#d4d4d4;border:1px solid #666;padding:2px 10px;border-radius:3px;cursor:pointer;font-size:11px;';
-  clearBtn.onclick = () => { logArea.innerHTML = ''; eventCount = 0; badge.textContent = '0'; };
-
-  const exportBtn = document.createElement('button');
-  exportBtn.textContent = 'Export JSON';
-  exportBtn.style.cssText = 'background:#555;color:#d4d4d4;border:1px solid #666;padding:2px 10px;border-radius:3px;cursor:pointer;font-size:11px;';
-  exportBtn.onclick = exportLog;
-
-  const searchInput = document.createElement('input');
-  searchInput.placeholder = 'Filter...';
-  searchInput.style.cssText = 'background:#1e1e1e;color:#d4d4d4;border:1px solid #555;padding:2px 6px;border-radius:3px;font-size:11px;flex:1;min-width:80px;';
-  searchInput.oninput = filterLog;
-
-  toolbar.appendChild(pauseBtn);
-  toolbar.appendChild(clearBtn);
-  toolbar.appendChild(exportBtn);
-  toolbar.appendChild(searchInput);
-  panel.appendChild(toolbar);
-
-  // Log area
   const logArea = document.createElement('div');
   logArea.id = 'forja-log';
   logArea.style.cssText = 'flex:1;padding:4px;overflow-y:auto;overflow-x:hidden;background:#1e1e1e;';
-  panel.appendChild(logArea);
 
-  // Status bar
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'padding:3px 8px;background:#333;border-bottom:1px solid #444;display:flex;gap:6px;flex-shrink:0;align-items:center;';
+
   const statusBar = document.createElement('div');
   statusBar.id = 'forja-status';
-  statusBar.style.cssText = 'padding:3px 10px;background:#3c3f41;color:#888;font-size:10px;border-top:1px solid #555;' +
-    'display:flex;justify-content:space-between;flex-shrink:0;';
-  statusBar.innerHTML = '<span>Monitoring active</span><span>Forja Agent</span>';
+  statusBar.style.cssText = 'padding:3px 10px;background:#3c3f41;color:#888;font-size:10px;border-top:1px solid #555;display:flex;justify-content:space-between;flex-shrink:0;';
+  statusBar.innerHTML = '<span>Analyzing...</span><span>Forja Object Sniffer</span>';
+
+  // Build tabs, toolbar buttons, log area — same pattern as panel template
+  // Include: Pause/Resume, Clear, Export JSON, search filter
+  panel.appendChild(tabBar);
+  panel.appendChild(toolbar);
+  panel.appendChild(logArea);
   panel.appendChild(statusBar);
-
   document.body.appendChild(panel);
-
-  // --- Internal state ---
-  let eventCount = 0;
-  const allEntries = [];
-
-  function filterLog() {
-    const search = searchInput.value.toLowerCase();
-    logArea.querySelectorAll('.forja-entry').forEach(el => {
-      const matchTab = activeTab === 'All' || el.dataset.category === activeTab;
-      const matchSearch = !search || el.textContent.toLowerCase().includes(search);
-      el.style.display = (matchTab && matchSearch) ? 'block' : 'none';
-    });
-  }
-
-  // --- Logging helpers ---
-  window.forjaSniff = function(category, msg, detail, type) {
-    if (paused) return;
-    eventCount++;
-    badge.textContent = eventCount;
-
-    const colors = {
-      info: '#8acdff', success: '#6a9955', warn: '#e8a238',
-      error: '#f44747', critical: '#ff6b6b', data: '#d4d4d4', header: '#c586c0'
-    };
-    const color = colors[type] || colors.data;
-    const time = new Date().toLocaleTimeString();
-
-    const entry = document.createElement('div');
-    entry.className = 'forja-entry';
-    entry.dataset.category = category;
-    entry.style.cssText = 'margin:1px 0;padding:2px 4px;border-bottom:1px solid #2a2a2a;word-break:break-all;';
-
-    const catBadge = '<span style="background:#333;color:#888;padding:0 4px;border-radius:2px;font-size:10px;margin-right:4px;">' + category + '</span>';
-    entry.innerHTML = '<span style="color:#555;">[' + time + ']</span> ' + catBadge + '<span style="color:' + color + ';">' + escapeHtml(msg) + '</span>';
-
-    if (detail) {
-      const detailEl = document.createElement('div');
-      detailEl.style.cssText = 'margin-left:20px;color:#888;font-size:10px;max-height:60px;overflow:hidden;cursor:pointer;';
-      detailEl.textContent = typeof detail === 'object' ? JSON.stringify(detail, null, 2).substring(0, 500) : String(detail).substring(0, 500);
-      detailEl.onclick = () => { detailEl.style.maxHeight = detailEl.style.maxHeight === 'none' ? '60px' : 'none'; };
-      entry.appendChild(detailEl);
-    }
-
-    logArea.appendChild(entry);
-    logArea.scrollTop = logArea.scrollHeight;
-
-    allEntries.push({ time, category, msg, detail, type });
-    console.log('[Forja:' + category + '] ' + msg, detail || '');
-  };
-
-  function escapeHtml(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function exportLog() {
-    const blob = new Blob([JSON.stringify(allEntries, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'forja_sniffer_' + Date.now() + '.json';
-    a.click();
-  }
 })();
 ```
 
-## Important Rules
+## Rules
 
-1. Use the panel template above as-is — do NOT simplify or remove features (tabs, toolbar, drag, resize)
-2. After the panel setup, implement ALL the monitoring hooks described above
-3. Use `forjaSniff(category, message, detail, type)` for ALL logging. Categories must match the tab names: 'Globals', 'Network', 'Storage', 'Cookies', 'Forms', 'PostMsg', 'DOM', 'Eval'
-4. The sniffer must be NON-DESTRUCTIVE — it must not break the application's functionality. All hooks must call the original function after logging.
-5. Wrap each hook in try-catch so one failure doesn't prevent others from running
-6. Save original functions before overriding (e.g., `const origFetch = window.fetch`)
-7. For globals enumeration, exclude standard browser properties — compare against a baseline list
-8. Flag sensitive data patterns: passwords, tokens (JWT, Bearer), API keys, secrets, SSNs, emails, credit card numbers
-9. The script should work on any modern browser (Chrome, Firefox, Edge)
-10. Keep the total script under 300 lines — focus on quality of monitoring over quantity of code
-11. Update the status bar with the count of intercepted events
-12. Use appropriate log types: 'warn' for sensitive data exposure, 'error' for security issues, 'info' for normal operations
+1. Use the panel template above — include tabs, toolbar (Pause/Clear/Export/Filter), drag, resize
+2. Tab categories MUST reflect what the app actually does — don't add tabs for things the app doesn't use
+3. Use `forjaSniff(category, message, detail, type)` for logging
+4. Be NON-DESTRUCTIVE — always call original functions after hooking
+5. Wrap each hook in try-catch
+6. Save originals before overriding (`const origFetch = window.fetch`)
+7. Flag sensitive data: tokens, passwords, API keys, PII — but only patterns the app actually handles
+8. Keep under 300 lines — quality over quantity
+9. Log types: 'warn' for sensitive data, 'error' for security issues, 'info' for normal, 'critical' for auth bypass/exposure
+10. Update status bar with event count and what's being monitored
 
-## Application Context Usage
+## If no source code is provided
 
-When given application context (endpoints, auth patterns, tech stack):
-- Focus monitoring on the specific auth mechanisms used (Bearer tokens, cookies, API keys)
-- Watch for the specific global variables and storage keys the application uses
-- Tailor form monitoring to the application's authentication forms
-- If jQuery/axios/specific frameworks are detected in the tech stack, hook their specific APIs
+If the application JavaScript section says "No JavaScript source code captured yet", fall back to these generic monitors:
+- Custom window globals (non-browser-default)
+- fetch/XHR interception
+- localStorage/sessionStorage
+- Cookie writes
+- But TELL the user in the status bar: "Generic mode — browse more pages with Forja proxy to capture JS for targeted analysis"
 
 Always output ONLY the JavaScript code wrapped in ```javascript code blocks.
