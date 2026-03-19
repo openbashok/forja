@@ -31,7 +31,18 @@ public class ToolkitTab extends JPanel {
     private final JTextArea codeArea;
     private final JTextArea promptArea;
     private final JLabel statusLabel;
+    private final JProgressBar progressBar;
     private final List<GeneratedTool> tools = new ArrayList<>();
+
+    private Timer progressTimer;
+    private int elapsedSeconds;
+
+    private static final String PLACEHOLDER = "Examples:\n"
+            + "  - Generate a JS script that tests IDOR on all endpoints with sequential IDs\n"
+            + "  - Create a Python script to brute-force JWT secrets using the tokens found\n"
+            + "  - Build a Burp extension that replays all authenticated requests without the auth header\n"
+            + "  - Make a PoC that demonstrates the CORS misconfiguration with credential theft\n"
+            + "  - Generate a fuzzer for all query parameters using SQLi and XSS payloads";
 
     public ToolkitTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory,
                       Supplier<List<Finding>> findingsSupplier) {
@@ -43,20 +54,31 @@ public class ToolkitTab extends JPanel {
         setLayout(new BorderLayout());
 
         // Toolbar
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JPanel toolbar = new JPanel(new BorderLayout());
+        JPanel toolbarButtons = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton generateAllBtn = new JButton("Generate All Tools");
         generateAllBtn.addActionListener(e -> generateAll());
         JButton copyBtn = new JButton("Copy Code");
         copyBtn.addActionListener(e -> copyCode());
         JButton saveBtn = new JButton("Save to File");
         saveBtn.addActionListener(e -> saveToFile());
-        statusLabel = new JLabel("Ready");
 
-        toolbar.add(generateAllBtn);
-        toolbar.add(copyBtn);
-        toolbar.add(saveBtn);
-        toolbar.add(Box.createHorizontalStrut(10));
-        toolbar.add(statusLabel);
+        toolbarButtons.add(generateAllBtn);
+        toolbarButtons.add(copyBtn);
+        toolbarButtons.add(saveBtn);
+        toolbar.add(toolbarButtons, BorderLayout.WEST);
+
+        // Status + progress bar
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        statusLabel = new JLabel("Ready");
+        progressBar = new JProgressBar();
+        progressBar.setIndeterminate(true);
+        progressBar.setPreferredSize(new Dimension(120, 18));
+        progressBar.setVisible(false);
+        statusPanel.add(statusLabel);
+        statusPanel.add(progressBar);
+        toolbar.add(statusPanel, BorderLayout.EAST);
+
         add(toolbar, BorderLayout.NORTH);
 
         // Split pane: tool list | code preview
@@ -85,18 +107,12 @@ public class ToolkitTab extends JPanel {
         promptArea.setFont(UIConstants.MONO_FONT);
 
         // Placeholder text
-        String placeholder = "Examples:\n"
-                + "  - Generate a JS script that tests IDOR on all endpoints with sequential IDs\n"
-                + "  - Create a Python script to brute-force JWT secrets using the tokens found\n"
-                + "  - Build a Burp extension that replays all authenticated requests without the auth header\n"
-                + "  - Make a PoC that demonstrates the CORS misconfiguration with credential theft\n"
-                + "  - Generate a fuzzer for all query parameters using SQLi and XSS payloads";
-        promptArea.setText(placeholder);
+        promptArea.setText(PLACEHOLDER);
         promptArea.setForeground(UIManager.getColor("textInactiveText"));
         promptArea.addFocusListener(new FocusAdapter() {
             @Override
             public void focusGained(FocusEvent e) {
-                if (promptArea.getText().equals(placeholder)) {
+                if (promptArea.getText().equals(PLACEHOLDER)) {
                     promptArea.setText("");
                     promptArea.setForeground(UIConstants.textForeground());
                 }
@@ -104,7 +120,7 @@ public class ToolkitTab extends JPanel {
             @Override
             public void focusLost(FocusEvent e) {
                 if (promptArea.getText().trim().isEmpty()) {
-                    promptArea.setText(placeholder);
+                    promptArea.setText(PLACEHOLDER);
                     promptArea.setForeground(UIManager.getColor("textInactiveText"));
                 }
             }
@@ -159,6 +175,30 @@ public class ToolkitTab extends JPanel {
         add(promptPanel, BorderLayout.SOUTH);
     }
 
+    // --- Progress indicator ---
+
+    private void startProgress(String message) {
+        elapsedSeconds = 0;
+        statusLabel.setText(message + " (0s)");
+        progressBar.setVisible(true);
+        progressTimer = new Timer(1000, e -> {
+            elapsedSeconds++;
+            statusLabel.setText(message + " (" + elapsedSeconds + "s)");
+        });
+        progressTimer.start();
+    }
+
+    private void stopProgress(String message) {
+        if (progressTimer != null) {
+            progressTimer.stop();
+            progressTimer = null;
+        }
+        progressBar.setVisible(false);
+        statusLabel.setText(message + " (" + elapsedSeconds + "s)");
+    }
+
+    // --- Generation ---
+
     private void generateFromPrompt() {
         String prompt = promptArea.getText().trim();
         if (prompt.isEmpty() || prompt.startsWith("Examples:\n")) {
@@ -167,7 +207,7 @@ public class ToolkitTab extends JPanel {
         }
 
         List<Finding> findings = findingsSupplier.get();
-        statusLabel.setText("Generating from prompt...");
+        startProgress("Generating from prompt...");
 
         new SwingWorker<GeneratedTool, Void>() {
             @Override
@@ -180,13 +220,11 @@ public class ToolkitTab extends JPanel {
             protected void done() {
                 try {
                     GeneratedTool tool = get();
-                    tools.add(tool);
-                    toolListModel.addElement("[" + tool.getType().getDisplayName() + "] " + tool.getDescription());
-                    toolList.setSelectedIndex(tools.size() - 1);
-                    statusLabel.setText("Tool generated from prompt.");
+                    addTool(tool);
+                    stopProgress("Tool generated from prompt");
                 } catch (Exception e) {
                     String msg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-                    statusLabel.setText("Generation failed: " + msg);
+                    stopProgress("Generation failed: " + msg);
                 }
             }
         }.execute();
@@ -199,7 +237,7 @@ public class ToolkitTab extends JPanel {
             return;
         }
 
-        statusLabel.setText("Generating tools...");
+        startProgress("Generating tools...");
         new SwingWorker<List<GeneratedTool>, Void>() {
             @Override
             protected List<GeneratedTool> doInBackground() throws Exception {
@@ -211,32 +249,47 @@ public class ToolkitTab extends JPanel {
             protected void done() {
                 try {
                     List<GeneratedTool> generated = get();
-                    tools.clear();
-                    tools.addAll(generated);
-                    toolListModel.clear();
-                    for (GeneratedTool t : tools) {
-                        toolListModel.addElement("[" + t.getType().getDisplayName() + "] " + t.getName());
+                    for (GeneratedTool t : generated) {
+                        addTool(t);
                     }
-                    statusLabel.setText("Generated " + tools.size() + " tool(s).");
+                    stopProgress("Generated " + generated.size() + " tool(s)");
                     if (!tools.isEmpty()) {
-                        toolList.setSelectedIndex(0);
+                        toolList.setSelectedIndex(tools.size() - 1);
                     }
                 } catch (Exception e) {
                     String msg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
-                    statusLabel.setText("Generation failed: " + msg);
+                    stopProgress("Generation failed: " + msg);
                 }
             }
         }.execute();
+    }
+
+    /**
+     * Add a tool to the list without clearing existing ones.
+     */
+    private void addTool(GeneratedTool tool) {
+        tools.add(tool);
+        String label = "[" + tool.getType().getDisplayName() + "] " + tool.getName();
+        if (!tool.getDescription().isEmpty() && !tool.getDescription().equals(tool.getName())) {
+            label += " — " + truncate(tool.getDescription(), 60);
+        }
+        toolListModel.addElement(label);
+        toolList.setSelectedIndex(tools.size() - 1);
     }
 
     private void showTool() {
         int idx = toolList.getSelectedIndex();
         if (idx < 0 || idx >= tools.size()) return;
         GeneratedTool tool = tools.get(idx);
-        codeArea.setText("// " + tool.getName() + "\n// " + tool.getDescription()
-                + "\n// Language: " + tool.getLanguage()
-                + "\n// Generated: " + tool.getGeneratedAt()
-                + "\n\n" + tool.getCode());
+
+        String commentPrefix = "python".equals(tool.getLanguage()) ? "# " : "// ";
+        StringBuilder header = new StringBuilder();
+        header.append(commentPrefix).append(tool.getName()).append("\n");
+        header.append(commentPrefix).append(tool.getDescription()).append("\n");
+        header.append(commentPrefix).append("Language: ").append(tool.getLanguage()).append("\n");
+        header.append(commentPrefix).append("Generated: ").append(tool.getGeneratedAt()).append("\n\n");
+
+        codeArea.setText(header + tool.getCode());
         codeArea.setCaretPosition(0);
     }
 
@@ -271,5 +324,9 @@ public class ToolkitTab extends JPanel {
                 statusLabel.setText("Save failed: " + e.getMessage());
             }
         }
+    }
+
+    private static String truncate(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 }
