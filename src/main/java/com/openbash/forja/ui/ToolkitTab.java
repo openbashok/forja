@@ -13,6 +13,7 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.HierarchyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -113,17 +114,16 @@ public class ToolkitTab extends JPanel {
         JScrollPane codeScroll = new JScrollPane(codeArea);
         ForjaTheme.styleScrollPane(codeScroll);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScroll, codeScroll);
-        ForjaTheme.styleSplitPane(split);
-        split.setDividerLocation(280);
-        add(split, BorderLayout.CENTER);
+        JSplitPane hSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScroll, codeScroll);
+        ForjaTheme.styleSplitPane(hSplit);
+        hSplit.setDividerLocation(280);
 
-        // Prompt panel at bottom
+        // Prompt panel at bottom (resizable via vertical split)
         JPanel promptPanel = new JPanel(new BorderLayout(4, 4));
         promptPanel.setBackground(ForjaTheme.BG_DARK);
         promptPanel.setBorder(ForjaTheme.sectionBorder("Generate from Prompt — describe the tool you need"));
 
-        promptArea = new JTextArea(3, 60);
+        promptArea = new JTextArea(5, 60);
         promptArea.setLineWrap(true);
         promptArea.setWrapStyleWord(true);
         ForjaTheme.styleTextArea(promptArea);
@@ -203,7 +203,25 @@ public class ToolkitTab extends JPanel {
         promptBtnPanel.add(hint);
         promptBtnPanel.add(promptGenBtn);
         promptPanel.add(promptBtnPanel, BorderLayout.SOUTH);
-        add(promptPanel, BorderLayout.SOUTH);
+
+        // Vertical split: code area (top) | prompt (bottom) — resizable
+        JSplitPane vSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, hSplit, promptPanel);
+        ForjaTheme.styleSplitPane(vSplit);
+        vSplit.setResizeWeight(0.75); // code area gets 75% by default
+
+        // Deferred divider: set prompt to ~180px from bottom after shown
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                SwingUtilities.invokeLater(() -> {
+                    int h = getHeight();
+                    if (h > 0) {
+                        vSplit.setDividerLocation(h - 200);
+                    }
+                });
+            }
+        });
+
+        add(vSplit, BorderLayout.CENTER);
     }
 
     // --- Progress indicator ---

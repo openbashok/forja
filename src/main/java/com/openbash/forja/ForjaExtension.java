@@ -9,6 +9,7 @@ import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.integration.ForjaContextMenu;
 import com.openbash.forja.integration.ForjaScanCheck;
 import com.openbash.forja.integration.ScriptInjector;
+import com.openbash.forja.llm.CostTracker;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.toolkit.ToolkitGenerator;
 import com.openbash.forja.traffic.AppModel;
@@ -16,6 +17,7 @@ import com.openbash.forja.traffic.TrafficCollector;
 import com.openbash.forja.ui.*;
 
 import javax.swing.*;
+import java.awt.*;
 
 public class ForjaExtension implements BurpExtension {
 
@@ -65,7 +67,12 @@ public class ForjaExtension implements BurpExtension {
         tabbedPane.addTab("Generated Toolkit", toolkitTab);
         tabbedPane.addTab("Agent", agentTab);
 
-        api.userInterface().registerSuiteTab("Forja", tabbedPane);
+        // Main panel: tabs + cost status bar
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.add(tabbedPane, BorderLayout.CENTER);
+        mainPanel.add(buildCostBar(config), BorderLayout.SOUTH);
+
+        api.userInterface().registerSuiteTab("Forja", mainPanel);
 
         // Context menu
         api.userInterface().registerContextMenuItemsProvider(
@@ -75,5 +82,66 @@ public class ForjaExtension implements BurpExtension {
         api.scanner().registerScanCheck(new ForjaScanCheck());
 
         api.logging().logToOutput("Forja loaded successfully. Configure your API key in the Forja tab.");
+    }
+
+    private JPanel buildCostBar(ConfigManager config) {
+        JPanel bar = new JPanel(new BorderLayout());
+        bar.setBackground(ForjaTheme.BG_TOOLBAR);
+        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, ForjaTheme.BORDER_COLOR));
+
+        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
+        left.setBackground(ForjaTheme.BG_TOOLBAR);
+
+        JLabel brandLabel = new JLabel("Forja");
+        brandLabel.setFont(ForjaTheme.FONT_TITLE);
+        brandLabel.setForeground(ForjaTheme.ACCENT_ORANGE);
+
+        JLabel costLabel = new JLabel("Session cost: $0.0000 (0 calls)");
+        costLabel.setFont(ForjaTheme.FONT_MONO_SMALL);
+        costLabel.setForeground(ForjaTheme.TEXT_MUTED);
+
+        left.add(brandLabel);
+        left.add(new JLabel("|") {{ setForeground(ForjaTheme.BORDER_COLOR); }});
+        left.add(costLabel);
+
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 3));
+        right.setBackground(ForjaTheme.BG_TOOLBAR);
+
+        JLabel modelLabel = new JLabel(config.getProvider() + " / " + config.getModel());
+        modelLabel.setFont(ForjaTheme.FONT_UI_SMALL);
+        modelLabel.setForeground(ForjaTheme.TEXT_MUTED);
+
+        JButton resetBtn = new JButton("Reset");
+        resetBtn.setFont(new Font(Font.DIALOG, Font.PLAIN, 10));
+        resetBtn.setForeground(ForjaTheme.TEXT_MUTED);
+        resetBtn.setBackground(ForjaTheme.BG_TOOLBAR);
+        resetBtn.setBorderPainted(false);
+        resetBtn.setFocusPainted(false);
+        resetBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        resetBtn.setMargin(new Insets(1, 6, 1, 6));
+        resetBtn.addActionListener(e -> {
+            CostTracker.getInstance().reset();
+        });
+
+        right.add(modelLabel);
+        right.add(resetBtn);
+
+        bar.add(left, BorderLayout.WEST);
+        bar.add(right, BorderLayout.EAST);
+
+        // Update on cost changes
+        CostTracker.getInstance().addListener(() -> {
+            SwingUtilities.invokeLater(() -> {
+                CostTracker ct = CostTracker.getInstance();
+                costLabel.setText("Session cost: " + ct.getFormattedCost()
+                        + " (" + ct.getTotalCalls() + " calls, "
+                        + (ct.getTotalInputTokens() / 1000) + "k in, "
+                        + (ct.getTotalOutputTokens() / 1000) + "k out)");
+                // Update model label in case config changed
+                modelLabel.setText(config.getProvider() + " / " + config.getModel());
+            });
+        });
+
+        return bar;
     }
 }
