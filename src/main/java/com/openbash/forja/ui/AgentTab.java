@@ -439,7 +439,8 @@ public class AgentTab extends JPanel {
         pathField.addActionListener(e -> changeOutputDir(pathField.getText().trim()));
         pathRow.add(pathField, BorderLayout.CENTER);
 
-        JPanel pathButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        JPanel pathButtons = new JPanel();
+        pathButtons.setLayout(new BoxLayout(pathButtons, BoxLayout.X_AXIS));
         pathButtons.setOpaque(false);
 
         JButton browseBtn = new JButton("...");
@@ -449,25 +450,30 @@ public class AgentTab extends JPanel {
         browseBtn.setFocusPainted(false);
         browseBtn.setBorderPainted(false);
         browseBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        browseBtn.setMinimumSize(new Dimension(32, 24));
         browseBtn.setPreferredSize(new Dimension(32, 24));
+        browseBtn.setMaximumSize(new Dimension(32, 24));
         browseBtn.setToolTipText("Browse for output directory");
         browseBtn.addActionListener(e -> browseOutputDir());
         pathButtons.add(browseBtn);
+        pathButtons.add(Box.createHorizontalStrut(2));
 
-        JButton copyPathBtn = new JButton("Copy");
+        JButton copyPathBtn = new JButton("Copy Path");
         copyPathBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 10));
         copyPathBtn.setForeground(Color.WHITE);
         copyPathBtn.setBackground(ACCENT_GREEN);
         copyPathBtn.setFocusPainted(false);
         copyPathBtn.setBorderPainted(false);
         copyPathBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        copyPathBtn.setPreferredSize(new Dimension(48, 24));
+        copyPathBtn.setMinimumSize(new Dimension(72, 24));
+        copyPathBtn.setPreferredSize(new Dimension(72, 24));
+        copyPathBtn.setMaximumSize(new Dimension(72, 24));
         copyPathBtn.addActionListener(e -> {
             Toolkit.getDefaultToolkit().getSystemClipboard()
                     .setContents(new StringSelection(outputDir.toString()), null);
             statusLabel.setText("Path copied!");
             copyPathBtn.setText("OK!");
-            Timer t = new Timer(1500, ev -> copyPathBtn.setText("Copy"));
+            Timer t = new Timer(1500, ev -> copyPathBtn.setText("Copy Path"));
             t.setRepeats(false);
             t.start();
         });
@@ -476,15 +482,20 @@ public class AgentTab extends JPanel {
         pathRow.add(pathButtons, BorderLayout.EAST);
         header.add(pathRow);
 
-        // Recommendation
-        JLabel rec = new JLabel("<html><div style='padding:2px 6px;'>"
-                + "Set this to your project's working directory where you run "
-                + "Claude Code, Cursor, or your agent framework. Generated scripts "
-                + "and reports will be available there instantly.</div></html>");
+        // Recommendation — plain text JTextArea (no HTML rendering issues)
+        String recText = "Tip: Set this to your project directory where you run "
+                + "Claude Code, Cursor, or your agent framework. Generated "
+                + "scripts and reports will be available there instantly.";
+        JTextArea rec = new JTextArea(recText);
+        rec.setEditable(false);
+        rec.setLineWrap(true);
+        rec.setWrapStyleWord(true);
         rec.setFont(new Font(Font.DIALOG, Font.ITALIC, 10));
         rec.setForeground(TEXT_MUTED);
+        rec.setBackground(BG_TOOLBAR);
+        rec.setBorder(BorderFactory.createEmptyBorder(2, 12, 6, 12));
         rec.setAlignmentX(LEFT_ALIGNMENT);
-        rec.setBorder(BorderFactory.createEmptyBorder(0, 8, 6, 8));
+        rec.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
         header.add(rec);
 
         panel.add(header, BorderLayout.NORTH);
