@@ -2,11 +2,14 @@ package com.openbash.forja;
 
 import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
+import com.openbash.forja.agent.ActionExecutor;
+import com.openbash.forja.agent.BurpAgent;
 import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.integration.ForjaContextMenu;
 import com.openbash.forja.integration.ForjaScanCheck;
 import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.LLMProviderFactory;
+import com.openbash.forja.toolkit.ToolkitGenerator;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.traffic.TrafficCollector;
 import com.openbash.forja.ui.*;
@@ -41,11 +44,20 @@ public class ForjaExtension implements BurpExtension {
         AnalysisTab analysisTab = new AnalysisTab(appModel, config, providerFactory);
         ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, analysisTab::getFindings, scriptInjector);
 
+        // Agent
+        ActionExecutor actionExecutor = new ActionExecutor(api, appModel,
+                analysisTab::getFindings,
+                () -> new ToolkitGenerator(providerFactory.create(), config));
+        BurpAgent burpAgent = new BurpAgent(providerFactory, config, appModel,
+                analysisTab::getFindings, actionExecutor);
+        AgentTab agentTab = new AgentTab(burpAgent);
+
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Config", configTab);
         tabbedPane.addTab("Traffic Intelligence", trafficTab);
         tabbedPane.addTab("Analysis", analysisTab);
         tabbedPane.addTab("Generated Toolkit", toolkitTab);
+        tabbedPane.addTab("Agent", agentTab);
 
         api.userInterface().registerSuiteTab("Forja", tabbedPane);
 

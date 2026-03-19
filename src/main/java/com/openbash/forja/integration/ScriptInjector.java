@@ -74,10 +74,13 @@ public class ScriptInjector implements ProxyResponseHandler {
             injection.append("\n<!-- Forja Script Injection -->\n");
             for (var entry : activeScripts.entrySet()) {
                 injection.append("<script data-forja=\"").append(escapeAttr(entry.getKey())).append("\">\n");
-                injection.append("/* Forja: ").append(entry.getKey()).append(" */\n");
+                injection.append("// Forja: ").append(entry.getKey().replace("\n", " ")).append("\n");
+                String safeCode = entry.getValue().replace("</script>", "<\\/script>");
+                injection.append("(function() {\n");
                 injection.append("try {\n");
-                injection.append(entry.getValue()).append("\n");
+                injection.append(safeCode).append("\n");
                 injection.append("} catch(e) { console.error('[Forja] Error in ").append(escapeJs(entry.getKey())).append(":', e); }\n");
+                injection.append("})();\n");
                 injection.append("</script>\n");
             }
 
