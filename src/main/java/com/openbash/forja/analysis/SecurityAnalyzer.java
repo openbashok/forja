@@ -2,12 +2,10 @@ package com.openbash.forja.analysis;
 
 import com.google.gson.*;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,17 +13,19 @@ public class SecurityAnalyzer {
 
     private final LLMProvider provider;
     private final ConfigManager config;
+    private final PromptManager promptManager;
     private final ContextBuilder contextBuilder;
     private static final Gson GSON = new Gson();
 
-    public SecurityAnalyzer(LLMProvider provider, ConfigManager config) {
+    public SecurityAnalyzer(LLMProvider provider, ConfigManager config, PromptManager promptManager) {
         this.provider = provider;
         this.config = config;
+        this.promptManager = promptManager;
         this.contextBuilder = new ContextBuilder(8000);
     }
 
     public List<Finding> analyze(AppModel appModel) throws LLMException {
-        String systemPrompt = loadPrompt("prompts/analysis_system.txt");
+        String systemPrompt = promptManager.get("analysis_system");
         String context = contextBuilder.buildContext(appModel);
 
         String userPrompt = "Analyze the following web application traffic for security vulnerabilities.\n\n" + context;
@@ -82,15 +82,6 @@ public class SecurityAnalyzer {
             ));
         }
         return findings;
-    }
-
-    private String loadPrompt(String path) {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
-            if (is == null) return "You are a security analyst. Return findings as JSON.";
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "You are a security analyst. Return findings as JSON.";
-        }
     }
 
     private static String getStr(JsonObject obj, String key) {

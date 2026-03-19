@@ -6,6 +6,7 @@ import com.openbash.forja.agent.ActionExecutor;
 import com.openbash.forja.agent.BurpAgent;
 import com.openbash.forja.agent.ScopeTracker;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.integration.ForjaContextMenu;
 import com.openbash.forja.integration.ForjaScanCheck;
 import com.openbash.forja.integration.ScriptInjector;
@@ -28,6 +29,7 @@ public class ForjaExtension implements BurpExtension {
 
         // Core components
         ConfigManager config = new ConfigManager(api);
+        PromptManager promptManager = new PromptManager(config);
         LLMProviderFactory providerFactory = new LLMProviderFactory(config);
         AppModel appModel = new AppModel();
         appModel.setMaxEntries(config.getMaxTrafficEntries());
@@ -44,16 +46,16 @@ public class ForjaExtension implements BurpExtension {
         // UI tabs
         ConfigTab configTab = new ConfigTab(config, providerFactory);
         TrafficTab trafficTab = new TrafficTab(appModel, collector);
-        AnalysisTab analysisTab = new AnalysisTab(appModel, config, providerFactory);
-        ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, analysisTab::getFindings, scriptInjector);
+        AnalysisTab analysisTab = new AnalysisTab(appModel, config, providerFactory, promptManager);
+        ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, promptManager, analysisTab::getFindings, scriptInjector);
 
         // Agent
         ScopeTracker scopeTracker = new ScopeTracker(api);
         ActionExecutor actionExecutor = new ActionExecutor(api, appModel,
                 analysisTab::getFindings,
-                () -> new ToolkitGenerator(providerFactory.create(), config),
+                () -> new ToolkitGenerator(providerFactory.create(), config, promptManager),
                 scopeTracker);
-        BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, appModel,
+        BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, promptManager, appModel,
                 analysisTab::getFindings, actionExecutor);
         AgentTab agentTab = new AgentTab(burpAgent, config);
 
@@ -66,6 +68,7 @@ public class ForjaExtension implements BurpExtension {
         tabbedPane.addTab("Analysis", analysisTab);
         tabbedPane.addTab("Generated Toolkit", toolkitTab);
         tabbedPane.addTab("Agent", agentTab);
+        tabbedPane.addTab("Prompts", new PromptsTab(promptManager));
 
         // Main panel: tabs + cost status bar
         JPanel mainPanel = new JPanel(new BorderLayout());

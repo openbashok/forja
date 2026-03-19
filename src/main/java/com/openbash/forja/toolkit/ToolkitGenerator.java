@@ -3,6 +3,7 @@ package com.openbash.forja.toolkit;
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.analysis.Severity;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 
@@ -14,16 +15,18 @@ public class ToolkitGenerator {
 
     private final LLMProvider provider;
     private final ConfigManager config;
+    private final PromptManager promptManager;
 
-    public ToolkitGenerator(LLMProvider provider, ConfigManager config) {
+    public ToolkitGenerator(LLMProvider provider, ConfigManager config, PromptManager promptManager) {
         this.provider = provider;
         this.config = config;
+        this.promptManager = promptManager;
     }
 
     public List<GeneratedTool> generateAll(AppModel appModel, List<Finding> findings) throws LLMException {
         List<GeneratedTool> tools = new ArrayList<>();
-        JSGenerator jsGen = new JSGenerator(provider, config);
-        BurpPluginGenerator burpGen = new BurpPluginGenerator(provider, config);
+        JSGenerator jsGen = new JSGenerator(provider, config, promptManager);
+        BurpPluginGenerator burpGen = new BurpPluginGenerator(provider, config, promptManager);
 
         boolean hasAuthFindings = findings.stream()
                 .anyMatch(f -> f.getTitle().toLowerCase().contains("auth")
@@ -73,9 +76,9 @@ public class ToolkitGenerator {
     public GeneratedTool generateSingle(AppModel appModel, List<Finding> findings,
                                          String type, String toolType) throws LLMException {
         if ("js".equals(type)) {
-            return new JSGenerator(provider, config).generate(appModel, findings, toolType);
+            return new JSGenerator(provider, config, promptManager).generate(appModel, findings, toolType);
         } else {
-            return new BurpPluginGenerator(provider, config).generate(appModel, findings, toolType);
+            return new BurpPluginGenerator(provider, config, promptManager).generate(appModel, findings, toolType);
         }
     }
 

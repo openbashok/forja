@@ -1,6 +1,7 @@
 package com.openbash.forja.analysis;
 
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +31,7 @@ class SecurityAnalyzerTest {
     @Mock Preferences preferences;
 
     private ConfigManager config;
+    private PromptManager promptManager;
 
     @BeforeEach
     void setUp() {
@@ -43,11 +45,12 @@ class SecurityAnalyzerTest {
         }).when(preferences).setString(anyString(), anyString());
         config = new ConfigManager(api);
         config.setModel("gpt-4o");
+        promptManager = new PromptManager(config);
     }
 
     @Test
     void parseFindings_validJson() {
-        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config);
+        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config, promptManager);
         String json = """
                 {
                     "findings": [
@@ -75,7 +78,7 @@ class SecurityAnalyzerTest {
 
     @Test
     void parseFindings_jsonInCodeBlock() {
-        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config);
+        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config, promptManager);
         String content = "Here are the findings:\n```json\n{\"findings\": [{\"title\": \"XSS\", \"severity\": \"MEDIUM\", \"description\": \"Reflected XSS\", \"evidence\": \"\", \"affected_endpoints\": [], \"recommendation\": \"Encode output\", \"cwes\": []}]}\n```";
 
         List<Finding> findings = analyzer.parseFindings(content);
@@ -85,7 +88,7 @@ class SecurityAnalyzerTest {
 
     @Test
     void parseFindings_invalidJsonFallback() {
-        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config);
+        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config, promptManager);
         List<Finding> findings = analyzer.parseFindings("This is not JSON at all");
         assertEquals(1, findings.size());
         assertEquals(Severity.INFO, findings.get(0).getSeverity());
@@ -100,7 +103,7 @@ class SecurityAnalyzerTest {
         when(provider.chat(anyList(), eq("gpt-4o"), eq(4096)))
                 .thenReturn(new LLMResponse(response, 100, 50, "gpt-4o"));
 
-        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config);
+        SecurityAnalyzer analyzer = new SecurityAnalyzer(provider, config, promptManager);
         AppModel model = new AppModel();
         model.addOrUpdate("GET", "/test", "/test");
 

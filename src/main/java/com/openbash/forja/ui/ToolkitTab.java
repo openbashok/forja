@@ -2,6 +2,7 @@ package com.openbash.forja.ui;
 
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.toolkit.GeneratedTool;
@@ -27,6 +28,7 @@ public class ToolkitTab extends JPanel {
     private final AppModel appModel;
     private final ConfigManager config;
     private final LLMProviderFactory providerFactory;
+    private final PromptManager promptManager;
     private final Supplier<List<Finding>> findingsSupplier;
     private final ScriptInjector scriptInjector;
     private Consumer<GeneratedTool> onToolGenerated;
@@ -51,10 +53,11 @@ public class ToolkitTab extends JPanel {
             + "  - Generate a fuzzer for all query parameters using SQLi and XSS payloads";
 
     public ToolkitTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory,
-                      Supplier<List<Finding>> findingsSupplier, ScriptInjector scriptInjector) {
+                      PromptManager promptManager, Supplier<List<Finding>> findingsSupplier, ScriptInjector scriptInjector) {
         this.appModel = appModel;
         this.config = config;
         this.providerFactory = providerFactory;
+        this.promptManager = promptManager;
         this.findingsSupplier = findingsSupplier;
         this.scriptInjector = scriptInjector;
 
@@ -261,7 +264,7 @@ public class ToolkitTab extends JPanel {
         new SwingWorker<GeneratedTool, Void>() {
             @Override
             protected GeneratedTool doInBackground() throws Exception {
-                ToolkitGenerator gen = new ToolkitGenerator(providerFactory.create(), config);
+                ToolkitGenerator gen = new ToolkitGenerator(providerFactory.create(), config, promptManager);
                 return gen.generateFromPrompt(appModel, findings, prompt);
             }
 
@@ -290,7 +293,7 @@ public class ToolkitTab extends JPanel {
         new SwingWorker<List<GeneratedTool>, Void>() {
             @Override
             protected List<GeneratedTool> doInBackground() throws Exception {
-                ToolkitGenerator gen = new ToolkitGenerator(providerFactory.create(), config);
+                ToolkitGenerator gen = new ToolkitGenerator(providerFactory.create(), config, promptManager);
                 return gen.generateAll(appModel, findings);
             }
 

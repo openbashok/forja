@@ -2,12 +2,10 @@ package com.openbash.forja.toolkit;
 
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
@@ -18,14 +16,16 @@ public class BurpPluginGenerator {
 
     private final LLMProvider provider;
     private final ConfigManager config;
+    private final PromptManager promptManager;
 
-    public BurpPluginGenerator(LLMProvider provider, ConfigManager config) {
+    public BurpPluginGenerator(LLMProvider provider, ConfigManager config, PromptManager promptManager) {
         this.provider = provider;
         this.config = config;
+        this.promptManager = promptManager;
     }
 
     public GeneratedTool generate(AppModel appModel, List<Finding> findings, String toolType) throws LLMException {
-        String systemPrompt = loadPrompt("prompts/burp_generator.txt");
+        String systemPrompt = promptManager.get("burp_generator");
 
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("Generate a ").append(toolType).append(" Burp Suite extension in Python (Jython).\n\n");
@@ -94,12 +94,4 @@ public class BurpPluginGenerator {
         return content;
     }
 
-    private String loadPrompt(String path) {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
-            if (is == null) return "You generate Burp Suite extensions in Jython (Python).";
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "You generate Burp Suite extensions in Jython (Python).";
-        }
-    }
 }

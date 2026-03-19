@@ -2,6 +2,7 @@ package com.openbash.forja.agent;
 
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.toolkit.GeneratedTool;
 import com.openbash.forja.traffic.AppModel;
@@ -9,9 +10,6 @@ import com.openbash.forja.traffic.AppModel;
 import burp.api.montoya.MontoyaApi;
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -26,6 +24,7 @@ public class BurpAgent {
     private final MontoyaApi api;
     private final LLMProviderFactory providerFactory;
     private final ConfigManager config;
+    private final PromptManager promptManager;
     private final AppModel appModel;
     private final Supplier<List<Finding>> findingsSupplier;
     private final ActionExecutor actionExecutor;
@@ -34,11 +33,12 @@ public class BurpAgent {
     private volatile AgentMode mode = AgentMode.ASK;
 
     public BurpAgent(MontoyaApi api, LLMProviderFactory providerFactory, ConfigManager config,
-                     AppModel appModel, Supplier<List<Finding>> findingsSupplier,
+                     PromptManager promptManager, AppModel appModel, Supplier<List<Finding>> findingsSupplier,
                      ActionExecutor actionExecutor) {
         this.api = api;
         this.providerFactory = providerFactory;
         this.config = config;
+        this.promptManager = promptManager;
         this.appModel = appModel;
         this.findingsSupplier = findingsSupplier;
         this.actionExecutor = actionExecutor;
@@ -129,20 +129,14 @@ public class BurpAgent {
     }
 
     private String buildSystemPrompt() {
-        String basePrompt = loadPrompt("prompts/agent_system.txt");
+        String basePrompt = promptManager.get("agent_system");
 
         StringBuilder sb = new StringBuilder(basePrompt);
 
         // Append mode-specific instructions
         switch (mode) {
-            case AGENT -> {
-                String modePrompt = loadPrompt("prompts/agent_mode_agent.txt");
-                sb.append("\n\n").append(modePrompt);
-            }
-            case PLANNER -> {
-                String modePrompt = loadPrompt("prompts/agent_mode_planner.txt");
-                sb.append("\n\n").append(modePrompt);
-            }
+            case AGENT -> sb.append("\n\n").append(promptManager.get("agent_mode_agent"));
+            case PLANNER -> sb.append("\n\n").append(promptManager.get("agent_mode_planner"));
             default -> {} // ASK mode uses base prompt only
         }
 
@@ -198,12 +192,4 @@ public class BurpAgent {
         }
     }
 
-    private String loadPrompt(String path) {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
-            if (is == null) return "You are a Burp Suite assistant. Respond with JSON: {\"response\": \"...\", \"actions\": []}";
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "You are a Burp Suite assistant. Respond with JSON: {\"response\": \"...\", \"actions\": []}";
-        }
-    }
 }

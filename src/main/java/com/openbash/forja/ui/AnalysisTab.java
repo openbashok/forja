@@ -4,6 +4,7 @@ import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.analysis.SecurityAnalyzer;
 import com.openbash.forja.analysis.Severity;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.util.TokenEstimator;
@@ -20,6 +21,7 @@ public class AnalysisTab extends JPanel {
     private final AppModel appModel;
     private final ConfigManager config;
     private final LLMProviderFactory providerFactory;
+    private final PromptManager promptManager;
     private final FindingsTableModel tableModel;
     private final JTable table;
     private final JTextArea detailArea;
@@ -27,10 +29,11 @@ public class AnalysisTab extends JPanel {
     private final JButton analyzeBtn;
     private final JProgressBar progressBar;
 
-    public AnalysisTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory) {
+    public AnalysisTab(AppModel appModel, ConfigManager config, LLMProviderFactory providerFactory, PromptManager promptManager) {
         this.appModel = appModel;
         this.config = config;
         this.providerFactory = providerFactory;
+        this.promptManager = promptManager;
 
         setLayout(new BorderLayout());
         ForjaTheme.applyTo(this);
@@ -112,7 +115,7 @@ public class AnalysisTab extends JPanel {
         new SwingWorker<List<Finding>, Void>() {
             @Override
             protected List<Finding> doInBackground() throws Exception {
-                SecurityAnalyzer analyzer = new SecurityAnalyzer(providerFactory.create(), config);
+                SecurityAnalyzer analyzer = new SecurityAnalyzer(providerFactory.create(), config, promptManager);
                 return analyzer.analyze(appModel);
             }
 
@@ -148,7 +151,7 @@ public class AnalysisTab extends JPanel {
             return;
         }
 
-        SecurityAnalyzer analyzer = new SecurityAnalyzer(providerFactory.create(), config);
+        SecurityAnalyzer analyzer = new SecurityAnalyzer(providerFactory.create(), config, promptManager);
         int estimatedTokens = analyzer.estimateInputTokens(appModel);
         double estimatedCost = TokenEstimator.estimateCostUsd(estimatedTokens, 4096, config.getModel());
         String costStr = TokenEstimator.formatCost(estimatedCost);

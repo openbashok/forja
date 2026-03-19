@@ -2,27 +2,27 @@ package com.openbash.forja.toolkit;
 
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class JSGenerator {
 
     private final LLMProvider provider;
     private final ConfigManager config;
+    private final PromptManager promptManager;
 
-    public JSGenerator(LLMProvider provider, ConfigManager config) {
+    public JSGenerator(LLMProvider provider, ConfigManager config, PromptManager promptManager) {
         this.provider = provider;
         this.config = config;
+        this.promptManager = promptManager;
     }
 
     public GeneratedTool generate(AppModel appModel, List<Finding> findings, String toolType) throws LLMException {
-        String promptFile = "object-sniffer".equals(toolType) ? "prompts/js_sniffer.txt" : "prompts/js_generator.txt";
-        String systemPrompt = loadPrompt(promptFile);
+        String promptKey = "object-sniffer".equals(toolType) ? "js_sniffer" : "js_generator";
+        String systemPrompt = promptManager.get(promptKey);
 
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("Generate a ").append(toolType).append(" JavaScript script.\n\n");
@@ -87,12 +87,4 @@ public class JSGenerator {
         return content;
     }
 
-    private String loadPrompt(String path) {
-        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
-            if (is == null) return "You generate JavaScript security testing scripts.";
-            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "You generate JavaScript security testing scripts.";
-        }
-    }
 }
