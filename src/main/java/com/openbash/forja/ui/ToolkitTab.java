@@ -255,7 +255,13 @@ public class ToolkitTab extends JPanel {
         GeneratedTool tool = tools.get(idx);
 
         JFileChooser fc = new JFileChooser();
-        String ext = "java".equals(tool.getLanguage()) ? ".java" : ".js";
+        String ext = switch (tool.getLanguage()) {
+            case "python" -> ".py";
+            case "java" -> ".java";
+            case "html" -> ".html";
+            case "bash" -> ".sh";
+            default -> ".js";
+        };
         fc.setSelectedFile(new File(tool.getName().replaceAll("\\s+", "_") + ext));
         if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             try {

@@ -112,12 +112,14 @@ public class ToolkitGenerator {
                 + "- Generate exactly what the user asks for\n"
                 + "- Use real endpoints, parameters, and patterns from the application context\n"
                 + "- For JavaScript: use modern ES6+ with fetch API, runnable in browser console or Node.js\n"
-                + "- For Java/Burp extensions: use Montoya API (burp.api.montoya.*)\n"
-                + "- For Python: use requests library\n"
+                + "- For Burp extensions: use Jython (Python) with the legacy Burp API (IBurpExtender, IHttpListener, etc.). "
+                + "NEVER generate Java Burp extensions — Jython .py files load directly in Burp without compilation\n"
+                + "- For standalone Python scripts: use requests library\n"
                 + "- Include clear comments and configurable variables at the top\n"
-                + "- Handle errors gracefully\n\n"
+                + "- Handle errors gracefully\n"
+                + "- Keep code concise and self-contained in a single file\n\n"
                 + "Output the complete code wrapped in a fenced code block with the language tag "
-                + "(```javascript, ```java, ```python, etc.).\n"
+                + "(```javascript, ```python, etc.).\n"
                 + "Before the code block, write a one-line description of the tool.";
 
         LLMResponse response = provider.chat(
@@ -131,9 +133,18 @@ public class ToolkitGenerator {
         String language = detectLanguage(content);
         String description = extractDescription(content);
 
+        GeneratedTool.ToolType toolType;
+        if (content.contains("IBurpExtender") || content.contains("registerExtenderCallbacks")) {
+            toolType = GeneratedTool.ToolType.BURP_EXTENSION;
+        } else if (language.equals("javascript")) {
+            toolType = GeneratedTool.ToolType.JS_SCRIPT;
+        } else {
+            toolType = GeneratedTool.ToolType.JS_SCRIPT; // Python scripts, bash, etc.
+        }
+
         return new GeneratedTool(
                 "Custom Tool",
-                language.equals("java") ? GeneratedTool.ToolType.BURP_EXTENSION : GeneratedTool.ToolType.JS_SCRIPT,
+                toolType,
                 description,
                 code,
                 language

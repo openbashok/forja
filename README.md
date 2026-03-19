@@ -34,7 +34,7 @@ The entire flow runs inside Burp. No external tools, no CLI, no context switchin
 | Tool Type | Examples |
 |-----------|----------|
 | **JS Scripts** | Traffic sniffers, PoC exploits, JWT manipulators, request replayers |
-| **Burp Extensions** | Auth bypass testers, IDOR scanners, parameter fuzzers, custom scan checks |
+| **Burp Extensions (Jython)** | Auth bypass testers, IDOR scanners, parameter fuzzers, custom scan checks — generated as `.py` files, load directly in Burp without compilation |
 | **Custom tools** | Anything you describe in the prompt — Python scripts, HTML PoCs, whatever the assessment needs |
 
 Every tool is **generated from the intelligence gathered during live observation** — real endpoints, real auth tokens, real parameter names. The analyst starts testing with instruments already calibrated to the target.
