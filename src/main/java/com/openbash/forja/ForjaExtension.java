@@ -51,7 +51,7 @@ public class ForjaExtension implements BurpExtension {
                 analysisTab::getFindings,
                 () -> new ToolkitGenerator(providerFactory.create(), config),
                 scopeTracker);
-        BurpAgent burpAgent = new BurpAgent(providerFactory, config, appModel,
+        BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, appModel,
                 analysisTab::getFindings, actionExecutor);
         AgentTab agentTab = new AgentTab(burpAgent);
 

@@ -72,11 +72,12 @@ public class ScriptInjector implements ProxyResponseHandler {
             // Build the injection payload
             StringBuilder injection = new StringBuilder();
             injection.append("\n<!-- Forja Script Injection -->\n");
+
             for (var entry : activeScripts.entrySet()) {
+                String safeCode = escapeNonAscii(entry.getValue()).replace("</script>", "<\\/script>");
                 injection.append("<script data-forja=\"").append(escapeAttr(entry.getKey())).append("\">\n");
-                injection.append("// Forja: ").append(entry.getKey().replace("\n", " ")).append("\n");
-                String safeCode = entry.getValue().replace("</script>", "<\\/script>");
                 injection.append("(function() {\n");
+                injection.append("'use strict';\n");
                 injection.append("try {\n");
                 injection.append(safeCode).append("\n");
                 injection.append("} catch(e) { console.error('[Forja] Error in ").append(escapeJs(entry.getKey())).append(":', e); }\n");
@@ -110,5 +111,22 @@ public class ScriptInjector implements ProxyResponseHandler {
 
     private static String escapeJs(String s) {
         return s.replace("\\", "\\\\").replace("'", "\\'");
+    }
+
+    /**
+     * Escape non-ASCII characters to JS unicode escapes (backslash-u hex).
+     * Prevents encoding mismatches when injecting into pages with non-UTF-8 charsets.
+     */
+    private static String escapeNonAscii(String s) {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c > 0x7E) {
+                sb.append(String.format("\\u%04x", (int) c));
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }
