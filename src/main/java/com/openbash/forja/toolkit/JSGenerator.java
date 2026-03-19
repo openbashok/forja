@@ -50,7 +50,7 @@ public class JSGenerator {
         LLMResponse response = provider.chat(
                 List.of(Message.system(systemPrompt), Message.user(userPrompt.toString())),
                 config.getModel(),
-                4096
+                8192
         );
 
         String code = extractCode(response.getContent());

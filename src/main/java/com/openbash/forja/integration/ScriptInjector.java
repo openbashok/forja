@@ -106,6 +106,6 @@ public class ScriptInjector implements ProxyResponseHandler {
     }
 
     private static String escapeJs(String s) {
-        return s.replace("'", "\\'").replace("\\", "\\\\");
+        return s.replace("\\", "\\\\").replace("'", "\\'");
     }
 }
