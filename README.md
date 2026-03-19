@@ -31,6 +31,7 @@ An MCP gives you **windows into context**. A Burp extension **is part of the con
 3. **Observe** — Forja captures in-scope traffic and builds an intelligence map in real time
 4. **Analyze** — One click sends the traffic context to the LLM, returns severity-classified findings
 5. **Generate** — Auto-generates a toolkit from the findings, or describe what you need in the prompt
+6. **Agent** — Control everything with natural language: manage scope, run scans, execute scripts, install dependencies
 
 The entire flow runs inside Burp. No external tools, no CLI, no context switching.
 
@@ -49,9 +50,13 @@ The entire flow runs inside Burp. No external tools, no CLI, no context switchin
 
 | Tool Type | Examples |
 |-----------|----------|
-| **JS Scripts** | Traffic sniffers, PoC exploits, JWT manipulators, request replayers |
+| **JS Object Sniffer** | Runtime instrumentation that hooks globals, fetch/XHR, storage, cookies, forms, postMessage, DOM mutations, and eval — with tabbed UI, filtering, pause/resume, and JSON export |
+| **JS Traffic Sniffer** | Intercepts and logs all network requests with method, URL, status, headers, and body preview |
+| **JS Scripts** | PoC exploits, JWT manipulators, request replayers, parameter fuzzers |
 | **Burp Extensions (Jython)** | Auth bypass testers, IDOR scanners, parameter fuzzers, custom scan checks — generated as `.py` files, load directly in Burp without compilation |
 | **Custom tools** | Anything you describe in the prompt — Python scripts, HTML PoCs, whatever the assessment needs |
+
+All JS scripts inject into the page through Burp's proxy as floating panels styled to match Burp's dark theme — draggable, resizable, with status bars and controls. They look like native Burp windows inside the browser.
 
 Every tool is **generated from the intelligence gathered during live observation** — real endpoints, real auth tokens, real parameter names. The analyst starts testing with instruments already calibrated to the target.
 
@@ -82,14 +87,54 @@ The Generated Toolkit tab includes a prompt field where you describe what you ne
 
 The LLM receives your prompt plus the full application context — every endpoint, auth pattern, tech stack detail, and security finding. Quick-pick examples are available in a dropdown for common testing scenarios.
 
+## AI Agent
+
+The Agent tab is a natural language interface to control Burp Suite. Instead of clicking through menus, describe what you want:
+
+- *"Add copetel.com.ar to the scope and list all captured endpoints"*
+- *"Send a GET to /api/users/1 to Repeater with the auth header"*
+- *"Generate a SQL injection PoC for the login endpoints, run it, and if it fails install the missing dependencies"*
+- *"Create an attack plan for this application"*
+
+### Three Modes
+
+| Mode | Behavior |
+|------|----------|
+| **Ask** | Single question-response. Quick queries about the target, findings, or Burp state. |
+| **Agent** | Autonomous multi-step execution. Give a mission and the agent breaks it into steps, executes actions, fixes errors (installs missing deps automatically), and reports results. |
+| **Planner** | Creates a step-by-step attack plan without executing anything. Outputs a prioritized plan with specific techniques per endpoint. |
+
+### What the Agent Can Do
+
+| Category | Actions |
+|----------|---------|
+| **Scope** | Add/remove URLs, check scope status, list in-scope hosts |
+| **Traffic** | List endpoints, get endpoint details, traffic statistics |
+| **Findings** | List Forja AI findings, list Burp scanner issues (filtered by severity) |
+| **Burp tools** | Send requests to Repeater/Intruder, launch active scans, send HTTP requests |
+| **Generation** | Generate custom tools from descriptions, save files/reports |
+| **Shell access** | Run shell commands (pip install, npm install, etc.), read/write files, list directories |
+
+### Auto-Fix
+
+When a generated script fails due to missing dependencies, the agent detects the error pattern (ModuleNotFoundError, Cannot find module, command not found) and automatically installs the dependency and retries — no user intervention needed.
+
+### Files Panel
+
+Generated files appear in a panel on the right side of the Agent tab. Files are auto-saved to a configurable output directory (set it to your project's working directory for use with Claude Code, Cursor, or other tools). The code viewer is editable — modify scripts in-place and save. Run scripts directly from the UI with output streaming.
+
+Tools generated in the **Generated Toolkit** tab also appear in the Agent's file panel, and vice versa.
+
 ## Burp Integration
 
 | Feature | Description |
 |---------|-------------|
 | **Context menu** | Right-click any request: "Analyze This Request", "Generate PoC", "Add to Intelligence" |
 | **Passive scanner** | Automatic audit issues for JWT tokens in responses, sequential IDs, CORS wildcards, reflected parameters |
-| **Suite tab** | Four sub-tabs: Config, Traffic Intelligence, Analysis, Generated Toolkit |
-| **Persistence** | API key, model, budget, and preferences stored via Burp's persistence API |
+| **Script injection** | JS scripts inject directly into proxied HTML responses — the browser becomes an instrumentation platform |
+| **Scanner integration** | Agent reads Burp's native scanner findings (`siteMap().issues()`) and includes them in analysis context |
+| **Suite tab** | Five sub-tabs: Config, Traffic Intelligence, Analysis, Generated Toolkit, Agent |
+| **Persistence** | API key, model, budget, output directory, and preferences stored via Burp's persistence API |
 
 ## Installation
 
@@ -126,6 +171,7 @@ cd forja
 | Custom Endpoint | OpenAI-compatible API URL (Custom provider only) | — |
 | Max Generation Tokens | LLM output limit for generated tools (increase if scripts truncate) | 16384 |
 | Max Traffic Entries | Endpoint limit before eviction | 500 |
+| Output Directory | Where generated files are auto-saved (set to your project dir for Claude Code/Cursor integration) | System temp |
 
 API keys are stored on disk via Burp's persistence preferences. They are never logged or included in exports.
 
@@ -135,7 +181,7 @@ API keys are stored on disk via Burp's persistence preferences. They are never l
 src/main/java/com/openbash/forja/
 ├── ForjaExtension.java          # Entry point (BurpExtension)
 ├── config/
-│   └── ConfigManager.java       # Persistence wrapper
+│   └── ConfigManager.java       # Persistence wrapper (API key, model, output dir)
 ├── llm/
 │   ├── LLMProvider.java         # Provider interface
 │   ├── AnthropicProvider.java   # Claude API
@@ -154,17 +200,26 @@ src/main/java/com/openbash/forja/
 │   └── Severity.java            # CRITICAL → INFO with colors
 ├── toolkit/
 │   ├── ToolkitGenerator.java    # Orchestrator + free-form prompt
-│   ├── JSGenerator.java         # JS script generation
+│   ├── JSGenerator.java         # JS script + object sniffer generation
 │   ├── BurpPluginGenerator.java # Burp extension generation
 │   └── GeneratedTool.java       # Tool data structure
+├── agent/
+│   ├── BurpAgent.java           # Chat orchestrator (history, modes, system prompt)
+│   ├── ActionExecutor.java      # Executes actions against Montoya API + OS
+│   ├── AgentAction.java         # Action data structure + confirmation logic
+│   ├── AgentResponse.java       # LLM response parser (4-level fallback)
+│   ├── AgentMode.java           # Ask, Agent, Planner modes
+│   └── ScopeTracker.java        # Tracks in-scope/out-of-scope hosts
 ├── integration/
 │   ├── ForjaContextMenu.java    # Right-click menu items
-│   └── ForjaScanCheck.java      # Passive scan check
+│   ├── ForjaScanCheck.java      # Passive scan check
+│   └── ScriptInjector.java      # Injects JS into proxied HTML responses
 └── ui/
     ├── ConfigTab.java           # Provider/key/model config
     ├── TrafficTab.java          # Endpoint table + detail view
     ├── AnalysisTab.java         # Findings table + detail view
     ├── ToolkitTab.java          # Tool list + code preview + prompt
+    ├── AgentTab.java            # Chat UI + files panel + script runner
     └── UIConstants.java         # Dark theme compatible colors
 ```
 
