@@ -527,13 +527,13 @@ public class AgentTab extends JPanel {
         listScroll.getViewport().setBackground(BG_SIDEBAR);
         listScroll.setPreferredSize(new Dimension(0, 120));
 
-        // Code viewer
+        // Code viewer (editable — changes saved with Save button)
         codeViewer = new JTextArea();
-        codeViewer.setEditable(false);
+        codeViewer.setEditable(true);
         codeViewer.setBackground(BG_CODE);
         codeViewer.setForeground(TEXT_CODE);
         codeViewer.setFont(CODE_FONT);
-        codeViewer.setCaretColor(BG_CODE);
+        codeViewer.setCaretColor(ACCENT_GREEN);
         codeViewer.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
         codeViewer.setLineWrap(false);
         codeViewer.setTabSize(4);
@@ -559,6 +559,11 @@ public class AgentTab extends JPanel {
         runBtn.setForeground(ACCENT_GREEN);
         runBtn.addActionListener(e -> runSelectedFile());
         buttons.add(runBtn);
+
+        JButton saveEditBtn = createFileButton("Save");
+        saveEditBtn.setForeground(ACCENT_SEND);
+        saveEditBtn.addActionListener(e -> saveEditedFile());
+        buttons.add(saveEditBtn);
 
         JButton copyBtn = createFileButton("Copy");
         copyBtn.addActionListener(e -> copySelectedFile());
@@ -846,6 +851,29 @@ public class AgentTab extends JPanel {
         GeneratedTool tool = tools.get(idx);
         codeViewer.setText(tool.getCode());
         codeViewer.setCaretPosition(0);
+    }
+
+    private void saveEditedFile() {
+        int idx = filesList.getSelectedIndex();
+        if (idx < 0) {
+            statusLabel.setText("Select a file first");
+            return;
+        }
+        List<GeneratedTool> tools = agent.getGeneratedTools();
+        if (idx >= tools.size()) return;
+
+        GeneratedTool original = tools.get(idx);
+        String editedCode = codeViewer.getText();
+
+        // Replace the tool in the backing list with updated content
+        GeneratedTool updated = new GeneratedTool(
+                original.getName(), original.getType(),
+                original.getDescription(), editedCode, original.getLanguage());
+        agent.updateGeneratedTool(idx, updated);
+
+        // Write to disk
+        autoSaveFile(updated);
+        statusLabel.setText("Saved: " + original.getName() + fileExtension(original.getLanguage()));
     }
 
     private void copySelectedFile() {

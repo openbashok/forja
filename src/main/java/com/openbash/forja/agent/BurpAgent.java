@@ -89,6 +89,10 @@ public class BurpAgent {
         return actionExecutor.getGeneratedTools();
     }
 
+    public void updateGeneratedTool(int index, GeneratedTool updated) {
+        actionExecutor.updateGeneratedTool(index, updated);
+    }
+
     private String buildSystemPrompt() {
         String basePrompt = loadPrompt("prompts/agent_system.txt");
 

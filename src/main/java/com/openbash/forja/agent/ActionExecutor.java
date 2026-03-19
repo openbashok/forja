@@ -291,6 +291,12 @@ public class ActionExecutor {
         return Collections.unmodifiableList(generatedTools);
     }
 
+    public void updateGeneratedTool(int index, GeneratedTool updated) {
+        if (index >= 0 && index < generatedTools.size()) {
+            generatedTools.set(index, updated);
+        }
+    }
+
     private String generateTool(JsonObject params) {
         String prompt = getStr(params, "prompt");
         if (prompt.isEmpty()) return "Error: 'prompt' parameter is required";
