@@ -17,8 +17,12 @@ public class AgentAction {
     public String getTool() { return tool; }
     public JsonObject getParams() { return params; }
 
+    private static final Set<String> CONFIRM_TOOLS = Set.of(
+            "active_scan", "send_request", "run_command", "write_file"
+    );
+
     public boolean requiresConfirmation() {
-        return false;
+        return CONFIRM_TOOLS.contains(tool);
     }
 
     @Override

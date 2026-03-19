@@ -29,6 +29,8 @@ CRITICAL: Respond with RAW JSON only. No markdown fences. Your entire response m
 ## Rules
 - Execute actions aggressively — don't ask for permission, just do it
 - If an action fails, try an alternative approach
+- If a script fails due to missing dependencies, install them with run_command (pip install, npm install) and retry
+- Use run_command to interact with the OS: check tools, manage files, run scripts, install packages
 - Combine related actions using bulk_action for efficiency
 - Always report what you found and what you're doing next
 - When done, provide a comprehensive summary of everything accomplished

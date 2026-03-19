@@ -111,7 +111,13 @@ public class BurpAgent {
             default -> {} // ASK mode uses base prompt only
         }
 
-        sb.append("\n\n");
+        // Append system environment info
+        sb.append("\n\n## System Environment\n\n");
+        sb.append("OS: ").append(System.getProperty("os.name")).append(" ").append(System.getProperty("os.arch")).append("\n");
+        sb.append("Shell: ").append(System.getProperty("os.name", "").toLowerCase().contains("win") ? "cmd.exe / PowerShell" : "bash").append("\n");
+        sb.append("Output directory: ").append(config.getOutputDir()).append("\n");
+
+        sb.append("\n");
         sb.append(contextBuilder.buildContext(appModel));
 
         // Append Forja AI findings summary

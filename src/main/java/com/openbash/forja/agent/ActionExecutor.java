@@ -14,8 +14,12 @@ import com.openbash.forja.traffic.EndpointInfo;
 
 import burp.api.montoya.scanner.audit.issues.AuditIssue;
 
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -27,6 +31,10 @@ public class ActionExecutor {
     private final Supplier<ToolkitGenerator> toolkitGeneratorSupplier;
     private final ScopeTracker scopeTracker;
     private final List<GeneratedTool> generatedTools = new CopyOnWriteArrayList<>();
+
+    private static final int COMMAND_TIMEOUT_SECONDS = 120;
+    private static final int MAX_OUTPUT_CHARS = 8000;
+    private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("win");
 
     public ActionExecutor(MontoyaApi api, AppModel appModel,
                           Supplier<List<Finding>> findingsSupplier,
@@ -58,6 +66,10 @@ public class ActionExecutor {
                 case "generate_tool" -> generateTool(action.getParams());
                 case "save_file" -> saveFile(action.getParams());
                 case "list_burp_issues" -> listBurpIssues(action.getParams());
+                case "run_command" -> runCommand(action.getParams());
+                case "read_file" -> readFile(action.getParams());
+                case "list_files" -> listFiles(action.getParams());
+                case "write_file" -> writeFile(action.getParams());
                 default -> "Unknown action: " + action.getTool();
             };
         } catch (Exception e) {
@@ -388,6 +400,162 @@ public class ActionExecutor {
             return "Error accessing Burp scanner issues: " + e.getMessage();
         }
     }
+
+    // --- Shell & Filesystem Actions ---
+
+    private String runCommand(JsonObject params) {
+        String command = getStr(params, "command");
+        if (command.isEmpty()) return "Error: 'command' parameter is required";
+
+        String workDir = getStr(params, "working_dir");
+        int timeout = COMMAND_TIMEOUT_SECONDS;
+        if (params.has("timeout")) {
+            try { timeout = params.get("timeout").getAsInt(); } catch (Exception ignored) {}
+            timeout = Math.min(timeout, 300); // cap at 5 minutes
+        }
+
+        try {
+            ProcessBuilder pb;
+            if (IS_WINDOWS) {
+                pb = new ProcessBuilder("cmd.exe", "/c", command);
+            } else {
+                pb = new ProcessBuilder("bash", "-c", command);
+            }
+
+            // Set working directory
+            if (!workDir.isEmpty()) {
+                File dir = new File(workDir);
+                if (dir.isDirectory()) {
+                    pb.directory(dir);
+                } else {
+                    return "Error: working_dir '" + workDir + "' is not a valid directory";
+                }
+            }
+
+            pb.redirectErrorStream(true);
+
+            Process process = pb.start();
+
+            // Read output
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (output.length() < MAX_OUTPUT_CHARS) {
+                        output.append(line).append("\n");
+                    }
+                }
+            }
+
+            boolean finished = process.waitFor(timeout, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return "Command timed out after " + timeout + "s. Partial output:\n" + output;
+            }
+
+            int exitCode = process.exitValue();
+            String result = output.toString();
+            if (result.length() > MAX_OUTPUT_CHARS) {
+                result = result.substring(0, MAX_OUTPUT_CHARS) + "\n[... truncated at " + MAX_OUTPUT_CHARS + " chars ...]";
+            }
+
+            String header = "Exit code: " + exitCode + "\n";
+            if (result.isEmpty()) {
+                return header + "(no output)";
+            }
+            return header + result;
+
+        } catch (Exception e) {
+            return "Error running command: " + e.getMessage();
+        }
+    }
+
+    private String readFile(JsonObject params) {
+        String path = getStr(params, "path");
+        if (path.isEmpty()) return "Error: 'path' parameter is required";
+
+        try {
+            Path filePath = Path.of(path);
+            if (!Files.exists(filePath)) return "Error: file not found: " + path;
+            if (!Files.isRegularFile(filePath)) return "Error: not a regular file: " + path;
+
+            long size = Files.size(filePath);
+            if (size > 100_000) {
+                return "Error: file too large (" + size + " bytes). Max 100KB.";
+            }
+
+            String content = Files.readString(filePath);
+            if (content.length() > MAX_OUTPUT_CHARS) {
+                content = content.substring(0, MAX_OUTPUT_CHARS)
+                        + "\n[... truncated at " + MAX_OUTPUT_CHARS + " chars ...]";
+            }
+            return content;
+        } catch (Exception e) {
+            return "Error reading file: " + e.getMessage();
+        }
+    }
+
+    private String writeFile(JsonObject params) {
+        String path = getStr(params, "path");
+        String content = getStr(params, "content");
+        if (path.isEmpty()) return "Error: 'path' parameter is required";
+        if (content.isEmpty()) return "Error: 'content' parameter is required";
+
+        try {
+            Path filePath = Path.of(path);
+            Files.createDirectories(filePath.getParent());
+            Files.writeString(filePath, content);
+            return "Written " + content.length() + " chars to " + path;
+        } catch (Exception e) {
+            return "Error writing file: " + e.getMessage();
+        }
+    }
+
+    private String listFiles(JsonObject params) {
+        String path = getStr(params, "path", ".");
+        boolean recursive = params.has("recursive") && params.get("recursive").getAsBoolean();
+
+        try {
+            Path dir = Path.of(path);
+            if (!Files.isDirectory(dir)) return "Error: not a directory: " + path;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Contents of ").append(dir.toAbsolutePath()).append(":\n\n");
+
+            var stream = recursive ? Files.walk(dir, 3) : Files.list(dir);
+            List<Path> entries = stream.sorted().collect(Collectors.toList());
+            stream.close();
+
+            int count = 0;
+            for (Path entry : entries) {
+                if (entry.equals(dir)) continue;
+                String type = Files.isDirectory(entry) ? "DIR " : "    ";
+                String relative = dir.relativize(entry).toString();
+                sb.append(type).append(relative);
+                if (Files.isRegularFile(entry)) {
+                    long size = Files.size(entry);
+                    sb.append(" (").append(formatSize(size)).append(")");
+                }
+                sb.append("\n");
+                if (++count >= 200) {
+                    sb.append("... and more (truncated at 200 entries)\n");
+                    break;
+                }
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return "Error listing files: " + e.getMessage();
+        }
+    }
+
+    private static String formatSize(long bytes) {
+        if (bytes < 1024) return bytes + "B";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + "KB";
+        return String.format("%.1fMB", bytes / (1024.0 * 1024.0));
+    }
+
+    // --- HTTP Actions ---
 
     private HttpRequest buildHttpRequest(JsonObject params) {
         String url = getStr(params, "url");
