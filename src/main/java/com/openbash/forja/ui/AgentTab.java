@@ -130,19 +130,30 @@ public class AgentTab extends JPanel {
         // --- RIGHT: Files panel ---
         JPanel rightPanel = buildFilesPanel();
 
-        // Layout: left | center | right
+        // Layout: left | center | right — all resizable via JSplitPane dividers
         JSplitPane rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, centerPanel, rightPanel);
-        rightSplit.setDividerLocation(600);
-        rightSplit.setDividerSize(1);
-        rightSplit.setResizeWeight(0.65);
+        rightSplit.setResizeWeight(0.75); // chat gets 75% of remaining space
+        rightSplit.setDividerSize(4);
         rightSplit.setBorder(BorderFactory.createEmptyBorder());
         rightSplit.setContinuousLayout(true);
 
         JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSidebar, rightSplit);
-        mainSplit.setDividerLocation(190);
-        mainSplit.setDividerSize(1);
+        mainSplit.setDividerSize(4);
         mainSplit.setBorder(BorderFactory.createEmptyBorder());
         mainSplit.setContinuousLayout(true);
+
+        // Set divider positions after component is shown (deferred so sizes are known)
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing()) {
+                SwingUtilities.invokeLater(() -> {
+                    int totalWidth = getWidth();
+                    if (totalWidth > 0) {
+                        mainSplit.setDividerLocation(190);
+                        rightSplit.setDividerLocation(totalWidth - 190 - 320); // right panel ~320px
+                    }
+                });
+            }
+        });
 
         add(mainSplit, BorderLayout.CENTER);
 
@@ -465,9 +476,7 @@ public class AgentTab extends JPanel {
         copyPathBtn.setFocusPainted(false);
         copyPathBtn.setBorderPainted(false);
         copyPathBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        copyPathBtn.setMinimumSize(new Dimension(72, 24));
-        copyPathBtn.setPreferredSize(new Dimension(72, 24));
-        copyPathBtn.setMaximumSize(new Dimension(72, 24));
+        copyPathBtn.setMargin(new Insets(2, 10, 2, 10));
         copyPathBtn.addActionListener(e -> {
             Toolkit.getDefaultToolkit().getSystemClipboard()
                     .setContents(new StringSelection(outputDir.toString()), null);
