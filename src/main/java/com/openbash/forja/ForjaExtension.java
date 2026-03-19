@@ -24,8 +24,8 @@ public class ForjaExtension implements BurpExtension {
 
     @Override
     public void initialize(MontoyaApi api) {
-        api.extension().setName("Forja");
-        api.logging().logToOutput("Forja v1.0.0 - Dynamic Security Tool Generator");
+        api.extension().setName("Forja " + BuildInfo.getVersionString());
+        api.logging().logToOutput("Forja " + BuildInfo.getVersionString() + " - Dynamic Security Tool Generator");
 
         // Core components
         ConfigManager config = new ConfigManager(api);
@@ -120,7 +120,7 @@ public class ForjaExtension implements BurpExtension {
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
         left.setBackground(ForjaTheme.BG_TOOLBAR);
 
-        JLabel brandLabel = new JLabel("Forja");
+        JLabel brandLabel = new JLabel("Forja " + BuildInfo.getVersionString());
         brandLabel.setFont(ForjaTheme.FONT_TITLE);
         brandLabel.setForeground(ForjaTheme.ACCENT_ORANGE);
 

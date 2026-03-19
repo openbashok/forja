@@ -38,6 +38,40 @@ tasks.test {
     )
 }
 
+// Generate version.properties with git commit hash at build time
+tasks.register("generateVersionProperties") {
+    val outputDir = layout.buildDirectory.dir("generated-resources")
+    outputs.dir(outputDir)
+    doLast {
+        val gitHash = providers.exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+        }.standardOutput.asText.get().trim()
+
+        val gitHashFull = providers.exec {
+            commandLine("git", "rev-parse", "HEAD")
+        }.standardOutput.asText.get().trim()
+
+        val buildTime = System.currentTimeMillis().toString()
+
+        val propsDir = outputDir.get().asFile.resolve("version")
+        propsDir.mkdirs()
+        propsDir.resolve("version.properties").writeText(
+            "version=${project.version}\n" +
+            "commit=$gitHash\n" +
+            "commit.full=$gitHashFull\n" +
+            "build.time=$buildTime\n"
+        )
+    }
+}
+
+sourceSets.main {
+    resources.srcDir(layout.buildDirectory.dir("generated-resources"))
+}
+
+tasks.processResources {
+    dependsOn("generateVersionProperties")
+}
+
 tasks.shadowJar {
     archiveClassifier.set("")
 }
