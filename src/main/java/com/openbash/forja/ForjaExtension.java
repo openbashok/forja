@@ -4,6 +4,7 @@ import burp.api.montoya.BurpExtension;
 import burp.api.montoya.MontoyaApi;
 import com.openbash.forja.agent.ActionExecutor;
 import com.openbash.forja.agent.BurpAgent;
+import com.openbash.forja.agent.ScopeTracker;
 import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.integration.ForjaContextMenu;
 import com.openbash.forja.integration.ForjaScanCheck;
@@ -45,9 +46,11 @@ public class ForjaExtension implements BurpExtension {
         ToolkitTab toolkitTab = new ToolkitTab(appModel, config, providerFactory, analysisTab::getFindings, scriptInjector);
 
         // Agent
+        ScopeTracker scopeTracker = new ScopeTracker(api);
         ActionExecutor actionExecutor = new ActionExecutor(api, appModel,
                 analysisTab::getFindings,
-                () -> new ToolkitGenerator(providerFactory.create(), config));
+                () -> new ToolkitGenerator(providerFactory.create(), config),
+                scopeTracker);
         BurpAgent burpAgent = new BurpAgent(providerFactory, config, appModel,
                 analysisTab::getFindings, actionExecutor);
         AgentTab agentTab = new AgentTab(burpAgent);

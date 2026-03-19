@@ -11,9 +11,7 @@ import com.openbash.forja.toolkit.ToolkitGenerator;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.traffic.EndpointInfo;
 
-import java.net.URI;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -23,15 +21,17 @@ public class ActionExecutor {
     private final AppModel appModel;
     private final Supplier<List<Finding>> findingsSupplier;
     private final Supplier<ToolkitGenerator> toolkitGeneratorSupplier;
-    private final Set<String> knownScopeUrls = ConcurrentHashMap.newKeySet();
+    private final ScopeTracker scopeTracker;
 
     public ActionExecutor(MontoyaApi api, AppModel appModel,
                           Supplier<List<Finding>> findingsSupplier,
-                          Supplier<ToolkitGenerator> toolkitGeneratorSupplier) {
+                          Supplier<ToolkitGenerator> toolkitGeneratorSupplier,
+                          ScopeTracker scopeTracker) {
         this.api = api;
         this.appModel = appModel;
         this.findingsSupplier = findingsSupplier;
         this.toolkitGeneratorSupplier = toolkitGeneratorSupplier;
+        this.scopeTracker = scopeTracker;
     }
 
     public String execute(AgentAction action) {
@@ -62,7 +62,7 @@ public class ActionExecutor {
         String url = getStr(params, "url");
         if (url.isEmpty()) return "Error: missing 'url' parameter";
         api.scope().includeInScope(url);
-        knownScopeUrls.add(url);
+        scopeTracker.trackOrigin(url);
         return "Added " + url + " to scope";
     }
 
@@ -70,73 +70,49 @@ public class ActionExecutor {
         String url = getStr(params, "url");
         if (url.isEmpty()) return "Error: missing 'url' parameter";
         api.scope().excludeFromScope(url);
-        knownScopeUrls.remove(url);
         return "Removed " + url + " from scope";
     }
 
     private String getScopeStatus() {
         StringBuilder sb = new StringBuilder();
 
-        // Report URLs added via agent
-        if (!knownScopeUrls.isEmpty()) {
-            sb.append("URLs added to scope via Agent:\n");
-            for (String url : knownScopeUrls) {
-                boolean inScope = api.scope().isInScope(url);
-                sb.append("  ").append(inScope ? "[IN SCOPE]" : "[EXCLUDED]").append(" ").append(url).append("\n");
-            }
-            sb.append("\n");
+        List<String> inScope = scopeTracker.getInScopeHosts();
+        List<String> outOfScope = scopeTracker.getOutOfScopeHosts();
+
+        if (inScope.isEmpty() && outOfScope.isEmpty()) {
+            sb.append("No hosts found. The scope may be configured but no traffic has been captured yet.\n");
+            sb.append("Try browsing the target through Burp's proxy, or use check_scope to verify a specific URL.\n");
+            return sb.toString();
         }
 
-        // Extract unique hosts from captured traffic and check scope
-        Set<String> hosts = extractHostsFromTraffic();
-        if (!hosts.isEmpty()) {
-            sb.append("Hosts from captured traffic:\n");
-            int inScope = 0;
-            for (String host : hosts) {
-                boolean isIn = api.scope().isInScope(host);
-                sb.append("  ").append(isIn ? "[IN SCOPE]" : "[NOT IN SCOPE]").append(" ").append(host).append("\n");
-                if (isIn) inScope++;
+        if (!inScope.isEmpty()) {
+            sb.append("Hosts in scope (").append(inScope.size()).append("):\n");
+            for (String host : inScope) {
+                sb.append("  ").append(host).append("\n");
             }
-            sb.append("\n").append(inScope).append("/").append(hosts.size()).append(" hosts in scope\n");
-        } else if (knownScopeUrls.isEmpty()) {
-            sb.append("No traffic captured and no URLs added to scope yet.\n");
+        } else {
+            sb.append("No hosts in scope.\n");
         }
 
-        sb.append("Endpoints captured: ").append(appModel.getEndpointCount()).append("\n");
+        if (!outOfScope.isEmpty()) {
+            sb.append("\nHosts seen but not in scope (").append(outOfScope.size()).append("):\n");
+            for (String host : outOfScope) {
+                sb.append("  ").append(host).append("\n");
+            }
+        }
+
+        int total = inScope.size() + outOfScope.size();
+        sb.append("\nTotal: ").append(inScope.size()).append("/").append(total).append(" hosts in scope\n");
+        sb.append("Endpoints captured by Forja: ").append(appModel.getEndpointCount()).append("\n");
         return sb.toString();
     }
 
     private String checkScope(JsonObject params) {
         String url = getStr(params, "url");
         if (url.isEmpty()) return "Error: missing 'url' parameter";
+        scopeTracker.trackOrigin(url);
         boolean inScope = api.scope().isInScope(url);
         return url + " is " + (inScope ? "IN SCOPE" : "NOT in scope");
-    }
-
-    private Set<String> extractHostsFromTraffic() {
-        Set<String> hosts = new TreeSet<>();
-        for (EndpointInfo ep : appModel.getEndpoints().values()) {
-            String sample = ep.getSampleRequest();
-            if (sample != null) {
-                // Extract host from "Host: xxx" header in sample request
-                for (String line : sample.split("\n")) {
-                    String trimmed = line.trim();
-                    if (trimmed.toLowerCase().startsWith("host:")) {
-                        String host = trimmed.substring(5).trim();
-                        if (!host.isEmpty()) {
-                            // Build full URL for scope check
-                            String scheme = (sample.contains(":443") || sample.toLowerCase().contains("https"))
-                                    ? "https" : "http";
-                            hosts.add(scheme + "://" + host);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        // Also include known scope URLs
-        hosts.addAll(knownScopeUrls);
-        return hosts;
     }
 
     private String listEndpoints(JsonObject params) {

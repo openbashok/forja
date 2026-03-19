@@ -29,7 +29,7 @@ Remove a URL from Burp's target scope.
 Params: { "url": "https://example.com" }
 
 ### get_scope_status
-Report scope status: lists URLs added via Agent, checks hosts from captured traffic against scope, and shows endpoint count. Use this when the analyst asks about scope, hosts in scope, or what's being targeted.
+Report full scope status: extracts all hosts from Burp's site map and captured traffic, checks each against scope with isInScope(), and shows which are in/out of scope. Use this when the analyst asks about scope, hosts, or what's being targeted.
 Params: {}
 
 ### check_scope
