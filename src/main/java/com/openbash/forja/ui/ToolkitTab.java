@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class ToolkitTab extends JPanel {
@@ -27,6 +28,7 @@ public class ToolkitTab extends JPanel {
     private final LLMProviderFactory providerFactory;
     private final Supplier<List<Finding>> findingsSupplier;
     private final ScriptInjector scriptInjector;
+    private Consumer<GeneratedTool> onToolGenerated;
 
     private final DefaultListModel<String> toolListModel;
     private final JList<String> toolList;
@@ -274,6 +276,14 @@ public class ToolkitTab extends JPanel {
     }
 
     /**
+     * Set a callback to be notified when a tool is generated.
+     * Used to sync generated tools with the Agent tab.
+     */
+    public void setOnToolGenerated(Consumer<GeneratedTool> callback) {
+        this.onToolGenerated = callback;
+    }
+
+    /**
      * Add a tool to the list without clearing existing ones.
      */
     private void addTool(GeneratedTool tool) {
@@ -285,6 +295,11 @@ public class ToolkitTab extends JPanel {
         toolListModel.addElement(label);
         toolList.setSelectedIndex(tools.size() - 1);
         autoSaveToOutputDir(tool);
+
+        // Notify listener (syncs with Agent tab)
+        if (onToolGenerated != null) {
+            onToolGenerated.accept(tool);
+        }
     }
 
     private void autoSaveToOutputDir(GeneratedTool tool) {

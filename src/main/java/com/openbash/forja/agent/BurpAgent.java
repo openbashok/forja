@@ -77,8 +77,43 @@ public class BurpAgent {
     public String executeAction(AgentAction action) {
         String result = actionExecutor.execute(action);
         // Inject result into history so the LLM sees outcomes in next turn
-        addToHistory(Message.user("[Action result: " + action.getTool() + "] " + result));
+        String historyMsg = "[Action result: " + action.getTool() + "] " + result;
+
+        // If a command/script failed with a dependency error, add a strong hint to auto-fix
+        if (("run_command".equals(action.getTool())) && result.contains("Exit code: 1")) {
+            String hint = detectDependencyError(result);
+            if (hint != null) {
+                historyMsg += "\n[System] " + hint + " Fix it now and re-run.";
+            }
+        }
+
+        addToHistory(Message.user(historyMsg));
         return result;
+    }
+
+    private String detectDependencyError(String output) {
+        if (output.contains("ModuleNotFoundError") || output.contains("ImportError")) {
+            // Extract module name
+            var matcher = java.util.regex.Pattern.compile("No module named '([^']+)'").matcher(output);
+            if (matcher.find()) {
+                return "Missing Python module '" + matcher.group(1) + "'. Install it with: run_command pip install " + matcher.group(1);
+            }
+            return "Missing Python dependency. Use run_command with pip install to fix it.";
+        }
+        if (output.contains("Cannot find module") || output.contains("MODULE_NOT_FOUND")) {
+            var matcher = java.util.regex.Pattern.compile("Cannot find module '([^']+)'").matcher(output);
+            if (matcher.find()) {
+                return "Missing Node module '" + matcher.group(1) + "'. Install it with: run_command npm install " + matcher.group(1);
+            }
+            return "Missing Node.js dependency. Use run_command with npm install to fix it.";
+        }
+        if (output.contains("command not found") || output.contains("not recognized as")) {
+            return "Command not found. Use run_command to install the missing tool.";
+        }
+        if (output.contains("No such file or directory") && output.contains("python")) {
+            return "Python not found at expected path. Try python3 instead.";
+        }
+        return null;
     }
 
     public void clearHistory() {

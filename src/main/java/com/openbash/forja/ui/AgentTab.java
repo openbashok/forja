@@ -157,6 +157,10 @@ public class AgentTab extends JPanel {
 
         add(mainSplit, BorderLayout.CENTER);
 
+        // Poll for new tools from other tabs (e.g. Generated Toolkit) every 2 seconds
+        Timer syncTimer = new Timer(2000, e -> refreshFilesList());
+        syncTimer.start();
+
         // Welcome
         appendAgent("Forja Agent ready. I can control Burp Suite for you.\n"
                 + "Use the quick prompts on the left, or type your own command.\n\n"

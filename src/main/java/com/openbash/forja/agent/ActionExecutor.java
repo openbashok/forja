@@ -303,6 +303,13 @@ public class ActionExecutor {
         return Collections.unmodifiableList(generatedTools);
     }
 
+    /**
+     * Register a tool generated externally (e.g. from the Toolkit tab).
+     */
+    public void addGeneratedTool(GeneratedTool tool) {
+        generatedTools.add(tool);
+    }
+
     public void updateGeneratedTool(int index, GeneratedTool updated) {
         if (index >= 0 && index < generatedTools.size()) {
             generatedTools.set(index, updated);

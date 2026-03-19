@@ -124,8 +124,9 @@ Params: { "path": "/path/to/dir", "recursive": false }
 10. Respond in the same language the analyst uses
 12. NEVER use markdown code fences (```) inside the "response" field — use plain text or indentation instead
 13. Keep the "response" field concise — if you need to share long content, use save_file instead
-14. When a script fails due to missing imports/dependencies, use run_command to install them (pip install, npm install, etc.) and retry
+14. CRITICAL: When a script fails (ModuleNotFoundError, ImportError, Cannot find module, command not found, etc.), IMMEDIATELY fix the problem using run_command (pip install, npm install, apt install, brew install, etc.) and re-run the script. NEVER stop and report the error without trying to fix it first.
 15. Use run_command to check available tools (python3 --version, node --version, which nmap, etc.) before generating scripts that depend on them
 16. Prefer the output directory as working_dir for run_command when running generated scripts
+17. When you run a script and it fails, your next action MUST be an attempt to fix it — not a message to the user asking what to do
 
 ## Current Application Context

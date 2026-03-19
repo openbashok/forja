@@ -55,6 +55,9 @@ public class ForjaExtension implements BurpExtension {
                 analysisTab::getFindings, actionExecutor);
         AgentTab agentTab = new AgentTab(burpAgent, config);
 
+        // Sync: tools generated in Toolkit tab appear in Agent tab
+        toolkitTab.setOnToolGenerated(actionExecutor::addGeneratedTool);
+
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Config", configTab);
         tabbedPane.addTab("Traffic Intelligence", trafficTab);
