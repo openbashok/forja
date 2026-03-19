@@ -91,6 +91,15 @@ public class ConfigManager {
         setString("maxTrafficEntries", String.valueOf(max));
     }
 
+    // Output directory for generated files
+    public String getOutputDir() {
+        return getString("outputDir", System.getProperty("java.io.tmpdir") + "/forja-output");
+    }
+
+    public void setOutputDir(String dir) {
+        setString("outputDir", dir);
+    }
+
     private String getString(String key, String defaultValue) {
         String val = prefs.getString(PREFIX + key);
         return val != null ? val : defaultValue;

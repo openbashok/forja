@@ -284,6 +284,22 @@ public class ToolkitTab extends JPanel {
         }
         toolListModel.addElement(label);
         toolList.setSelectedIndex(tools.size() - 1);
+        autoSaveToOutputDir(tool);
+    }
+
+    private void autoSaveToOutputDir(GeneratedTool tool) {
+        try {
+            java.nio.file.Path dir = java.nio.file.Path.of(config.getOutputDir());
+            Files.createDirectories(dir);
+            String ext = switch (tool.getLanguage()) {
+                case "python" -> ".py";
+                case "javascript" -> ".js";
+                case "java" -> ".java";
+                default -> "." + tool.getLanguage();
+            };
+            String filename = tool.getName().replaceAll("[^a-zA-Z0-9._-]", "_") + ext;
+            Files.writeString(dir.resolve(filename), tool.getCode());
+        } catch (IOException ignored) {}
     }
 
     private void toggleInject() {

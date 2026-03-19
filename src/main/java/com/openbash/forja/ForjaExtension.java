@@ -53,7 +53,7 @@ public class ForjaExtension implements BurpExtension {
                 scopeTracker);
         BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, appModel,
                 analysisTab::getFindings, actionExecutor);
-        AgentTab agentTab = new AgentTab(burpAgent);
+        AgentTab agentTab = new AgentTab(burpAgent, config);
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Config", configTab);

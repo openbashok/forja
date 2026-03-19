@@ -4,6 +4,7 @@ import com.openbash.forja.agent.AgentAction;
 import com.openbash.forja.agent.AgentMode;
 import com.openbash.forja.agent.AgentResponse;
 import com.openbash.forja.agent.BurpAgent;
+import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.toolkit.GeneratedTool;
 
 import javax.swing.*;
@@ -20,6 +21,7 @@ import java.util.List;
 public class AgentTab extends JPanel {
 
     private final BurpAgent agent;
+    private final ConfigManager config;
     private JTextPane chatPane;
     private JTextField inputField;
     private JButton sendBtn;
@@ -32,6 +34,7 @@ public class AgentTab extends JPanel {
     private DefaultListModel<String> filesListModel;
     private JList<String> filesList;
     private JTextArea codeViewer;
+    private JTextField pathField;
 
     private Timer progressTimer;
     private int elapsedSeconds;
@@ -39,8 +42,8 @@ public class AgentTab extends JPanel {
     private volatile boolean stopRequested = false;
     private SwingWorker<?, ?> currentWorker = null;
 
-    // Output directory for auto-saving generated files
-    private final Path outputDir;
+    // Output directory for auto-saving generated files (mutable, persisted in config)
+    private Path outputDir;
 
     // Colors
     private static final Color BG_DARK = new Color(30, 30, 30);
@@ -111,8 +114,9 @@ public class AgentTab extends JPanel {
             {"Traffic sniffer", "generate and inject a JS traffic sniffer that captures all XHR/fetch requests in the browser"},
     };
 
-    public AgentTab(BurpAgent agent) {
+    public AgentTab(BurpAgent agent, ConfigManager config) {
         this.agent = agent;
+        this.config = config;
         this.outputDir = initOutputDir();
         setLayout(new BorderLayout());
         setBackground(BG_DARK);
@@ -152,11 +156,16 @@ public class AgentTab extends JPanel {
     // ========== Output directory ==========
 
     private Path initOutputDir() {
-        Path dir = Path.of(System.getProperty("java.io.tmpdir"), "forja-output");
+        Path dir = Path.of(config.getOutputDir());
         try {
             Files.createDirectories(dir);
         } catch (IOException ignored) {}
         return dir;
+    }
+
+    /** Returns the current output directory. Used by other tabs (e.g. ToolkitTab) to save files. */
+    public Path getOutputDir() {
+        return outputDir;
     }
 
     private void autoSaveFile(GeneratedTool tool) {
@@ -386,40 +395,64 @@ public class AgentTab extends JPanel {
         panel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, BORDER_COLOR));
         panel.setMinimumSize(new Dimension(200, 0));
 
-        // Header with output path (selectable + copy button)
-        JPanel header = new JPanel(new BorderLayout());
+        // Header: title + editable path + browse/copy buttons + recommendation
+        JPanel header = new JPanel();
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
         header.setBackground(BG_TOOLBAR);
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, BORDER_COLOR));
 
         JLabel title = new JLabel("  GENERATED FILES");
         title.setFont(SIDEBAR_TITLE);
         title.setForeground(TEXT_MUTED);
-        title.setBorder(BorderFactory.createEmptyBorder(6, 4, 2, 4));
-        header.add(title, BorderLayout.NORTH);
+        title.setAlignmentX(LEFT_ALIGNMENT);
+        title.setBorder(BorderFactory.createEmptyBorder(6, 4, 4, 4));
+        header.add(title);
 
-        // Path row: selectable text field + copy button
-        JPanel pathRow = new JPanel(new BorderLayout(4, 0));
+        // Output path label
+        JLabel pathLabel = new JLabel("  Output directory:");
+        pathLabel.setFont(new Font(Font.DIALOG, Font.PLAIN, 10));
+        pathLabel.setForeground(TEXT_MUTED);
+        pathLabel.setAlignmentX(LEFT_ALIGNMENT);
+        pathLabel.setBorder(BorderFactory.createEmptyBorder(0, 4, 2, 4));
+        header.add(pathLabel);
+
+        // Path row: editable text field + Browse + Copy buttons
+        JPanel pathRow = new JPanel(new BorderLayout(3, 0));
         pathRow.setBackground(BG_TOOLBAR);
-        pathRow.setBorder(BorderFactory.createEmptyBorder(2, 8, 6, 8));
+        pathRow.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
+        pathRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
+        pathRow.setAlignmentX(LEFT_ALIGNMENT);
 
-        JTextField pathField = new JTextField(outputDir.toString());
-        pathField.setEditable(false);
+        pathField = new JTextField(outputDir.toString());
         pathField.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
         pathField.setBackground(BG_INPUT);
         pathField.setForeground(ACCENT_GREEN);
         pathField.setCaretColor(ACCENT_GREEN);
         pathField.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BORDER_COLOR, 1),
-                BorderFactory.createEmptyBorder(3, 6, 3, 6)
+                BorderFactory.createEmptyBorder(2, 6, 2, 6)
         ));
-        // Click selects all for easy copy
         pathField.addFocusListener(new FocusAdapter() {
             @Override public void focusGained(FocusEvent e) { pathField.selectAll(); }
         });
-        pathField.addMouseListener(new MouseAdapter() {
-            @Override public void mouseClicked(MouseEvent e) { pathField.selectAll(); }
-        });
+        // Commit path on Enter
+        pathField.addActionListener(e -> changeOutputDir(pathField.getText().trim()));
         pathRow.add(pathField, BorderLayout.CENTER);
+
+        JPanel pathButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        pathButtons.setOpaque(false);
+
+        JButton browseBtn = new JButton("...");
+        browseBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 11));
+        browseBtn.setForeground(TEXT_DEFAULT);
+        browseBtn.setBackground(BG_INPUT);
+        browseBtn.setFocusPainted(false);
+        browseBtn.setBorderPainted(false);
+        browseBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        browseBtn.setPreferredSize(new Dimension(32, 24));
+        browseBtn.setToolTipText("Browse for output directory");
+        browseBtn.addActionListener(e -> browseOutputDir());
+        pathButtons.add(browseBtn);
 
         JButton copyPathBtn = new JButton("Copy");
         copyPathBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 10));
@@ -428,19 +461,32 @@ public class AgentTab extends JPanel {
         copyPathBtn.setFocusPainted(false);
         copyPathBtn.setBorderPainted(false);
         copyPathBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        copyPathBtn.setPreferredSize(new Dimension(52, 24));
+        copyPathBtn.setPreferredSize(new Dimension(48, 24));
         copyPathBtn.addActionListener(e -> {
             Toolkit.getDefaultToolkit().getSystemClipboard()
                     .setContents(new StringSelection(outputDir.toString()), null);
             statusLabel.setText("Path copied!");
             copyPathBtn.setText("OK!");
-            Timer resetTimer = new Timer(1500, ev -> copyPathBtn.setText("Copy"));
-            resetTimer.setRepeats(false);
-            resetTimer.start();
+            Timer t = new Timer(1500, ev -> copyPathBtn.setText("Copy"));
+            t.setRepeats(false);
+            t.start();
         });
-        pathRow.add(copyPathBtn, BorderLayout.EAST);
+        pathButtons.add(copyPathBtn);
 
-        header.add(pathRow, BorderLayout.SOUTH);
+        pathRow.add(pathButtons, BorderLayout.EAST);
+        header.add(pathRow);
+
+        // Recommendation
+        JLabel rec = new JLabel("<html><div style='padding:2px 6px;'>"
+                + "Set this to your project's working directory where you run "
+                + "Claude Code, Cursor, or your agent framework. Generated scripts "
+                + "and reports will be available there instantly.</div></html>");
+        rec.setFont(new Font(Font.DIALOG, Font.ITALIC, 10));
+        rec.setForeground(TEXT_MUTED);
+        rec.setAlignmentX(LEFT_ALIGNMENT);
+        rec.setBorder(BorderFactory.createEmptyBorder(0, 8, 6, 8));
+        header.add(rec);
+
         panel.add(header, BorderLayout.NORTH);
 
         // File list (top) + code viewer (bottom) in split
@@ -955,6 +1001,39 @@ public class AgentTab extends JPanel {
             } catch (Exception ignored) {}
         }
         return null;
+    }
+
+    private void changeOutputDir(String newPath) {
+        if (newPath.isEmpty()) return;
+        Path newDir = Path.of(newPath);
+        try {
+            Files.createDirectories(newDir);
+            outputDir = newDir;
+            config.setOutputDir(newPath);
+            pathField.setText(newPath);
+            statusLabel.setText("Output dir: " + newDir.getFileName());
+
+            // Re-save all existing files to new directory
+            List<GeneratedTool> tools = agent.getGeneratedTools();
+            for (GeneratedTool t : tools) {
+                autoSaveFile(t);
+            }
+            if (!tools.isEmpty()) {
+                statusLabel.setText("Output dir changed, " + tools.size() + " files copied");
+            }
+        } catch (IOException e) {
+            statusLabel.setText("Invalid directory: " + e.getMessage());
+            pathField.setText(outputDir.toString());
+        }
+    }
+
+    private void browseOutputDir() {
+        JFileChooser fc = new JFileChooser(outputDir.toFile());
+        fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        fc.setDialogTitle("Choose output directory for generated files");
+        if (fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            changeOutputDir(fc.getSelectedFile().getAbsolutePath());
+        }
     }
 
     private void openOutputDir() {
