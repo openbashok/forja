@@ -45,43 +45,106 @@ public class SecurityAnalyzer {
 
     List<Finding> parseFindings(String content) {
         List<Finding> findings = new ArrayList<>();
-        try {
-            // Extract JSON from potential markdown code blocks
-            String json = content.trim();
-            if (json.contains("```json")) {
-                json = json.substring(json.indexOf("```json") + 7);
-                json = json.substring(0, json.indexOf("```"));
-            } else if (json.contains("```")) {
-                json = json.substring(json.indexOf("```") + 3);
-                json = json.substring(0, json.indexOf("```"));
-            }
-
-            JsonObject root = GSON.fromJson(json.trim(), JsonObject.class);
-            JsonArray findingsArray = root.getAsJsonArray("findings");
-            if (findingsArray == null) return findings;
-
-            for (JsonElement elem : findingsArray) {
-                JsonObject f = elem.getAsJsonObject();
-                findings.add(new Finding(
-                        getStr(f, "title"),
-                        Severity.fromString(getStr(f, "severity")),
-                        getStr(f, "description"),
-                        getStr(f, "evidence"),
-                        getStrList(f, "affected_endpoints"),
-                        getStr(f, "recommendation"),
-                        getStrList(f, "cwes")
-                ));
-            }
-        } catch (Exception e) {
-            // If parsing fails, create a single finding with raw content
+        String json = extractJson(content);
+        if (json == null) {
             findings.add(new Finding(
                     "Analysis Result (unparsed)",
                     Severity.INFO,
                     content,
                     "", List.of(), "Review raw analysis output.", List.of()
             ));
+            return findings;
+        }
+
+        try {
+            JsonObject root = GSON.fromJson(json, JsonObject.class);
+            JsonArray findingsArray = root.getAsJsonArray("findings");
+            if (findingsArray == null) {
+                // Maybe the root IS the array
+                JsonArray directArray = GSON.fromJson(json, JsonArray.class);
+                if (directArray != null) findingsArray = directArray;
+            }
+            if (findingsArray == null) return findings;
+
+            for (JsonElement elem : findingsArray) {
+                try {
+                    JsonObject f = elem.getAsJsonObject();
+                    findings.add(new Finding(
+                            getStr(f, "title"),
+                            Severity.fromString(getStr(f, "severity")),
+                            getStr(f, "description"),
+                            getStr(f, "evidence"),
+                            getStrList(f, "affected_endpoints"),
+                            getStr(f, "recommendation"),
+                            getStrList(f, "cwes")
+                    ));
+                } catch (Exception ignored) {
+                    // Skip malformed individual findings, don't fail the whole batch
+                }
+            }
+        } catch (Exception e) {
+            findings.add(new Finding(
+                    "Analysis Result (unparsed)",
+                    Severity.INFO,
+                    content,
+                    "", List.of(), "Parse error: " + e.getMessage(), List.of()
+            ));
         }
         return findings;
+    }
+
+    /**
+     * Extract JSON from LLM response. Tries multiple strategies:
+     * 1. Markdown fenced block (```json ... ``` or ``` ... ```)
+     * 2. First { to last } (raw JSON object)
+     * 3. First [ to last ] (raw JSON array)
+     */
+    static String extractJson(String content) {
+        if (content == null || content.isBlank()) return null;
+        String trimmed = content.trim();
+
+        // Strategy 1: ```json ... ``` fenced block
+        int jsonFenceStart = trimmed.indexOf("```json");
+        if (jsonFenceStart >= 0) {
+            int bodyStart = trimmed.indexOf('\n', jsonFenceStart);
+            if (bodyStart < 0) bodyStart = jsonFenceStart + 7;
+            else bodyStart++;
+            int fenceEnd = trimmed.indexOf("```", bodyStart);
+            if (fenceEnd > bodyStart) {
+                String candidate = trimmed.substring(bodyStart, fenceEnd).trim();
+                if (!candidate.isEmpty()) return candidate;
+            }
+        }
+
+        // Strategy 2: ``` ... ``` generic fenced block
+        int fenceStart = trimmed.indexOf("```");
+        if (fenceStart >= 0) {
+            int bodyStart = trimmed.indexOf('\n', fenceStart);
+            if (bodyStart >= 0) {
+                bodyStart++;
+                int fenceEnd = trimmed.indexOf("```", bodyStart);
+                if (fenceEnd > bodyStart) {
+                    String candidate = trimmed.substring(bodyStart, fenceEnd).trim();
+                    if (candidate.startsWith("{") || candidate.startsWith("[")) return candidate;
+                }
+            }
+        }
+
+        // Strategy 3: Find outermost { ... } (JSON object)
+        int firstBrace = trimmed.indexOf('{');
+        int lastBrace = trimmed.lastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            return trimmed.substring(firstBrace, lastBrace + 1);
+        }
+
+        // Strategy 4: Find outermost [ ... ] (JSON array)
+        int firstBracket = trimmed.indexOf('[');
+        int lastBracket = trimmed.lastIndexOf(']');
+        if (firstBracket >= 0 && lastBracket > firstBracket) {
+            return trimmed.substring(firstBracket, lastBracket + 1);
+        }
+
+        return null;
     }
 
     private static String getStr(JsonObject obj, String key) {
