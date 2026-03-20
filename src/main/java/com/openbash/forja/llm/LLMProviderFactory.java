@@ -16,6 +16,10 @@ public class LLMProviderFactory {
         String provider = config.getProvider();
         String apiKey = config.getApiKey();
 
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            throw new IllegalStateException("API key not configured. Go to Forja > Config tab and enter your API key.");
+        }
+
         LLMProvider base = switch (provider) {
             case "Anthropic" -> new AnthropicProvider(apiKey);
             case "OpenAI" -> new OpenAIProvider(apiKey);

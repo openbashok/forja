@@ -1,0 +1,24 @@
+// Quick prompts for the Toolkit "Generate from Prompt" dropdown.
+// Format: # Category Name, then Label | Prompt text per line.
+// If no | separator, the whole line is used as both label and prompt.
+// Edit this file to add, remove, or reorder prompts.
+
+# JavaScript
+Test IDOR on all endpoints | JS: Test IDOR on all endpoints with sequential IDs
+Replay without auth | JS: Replay authenticated requests and compare responses without auth
+JWT token audit | JS: Extract and decode all JWT tokens, check for weak algorithms
+
+# Python
+Brute-force JWT secret | Python: Brute-force JWT secret using common wordlist
+Rate limit tester | Python: Test all endpoints for rate limiting
+
+# Burp Extension
+Token swapper | Burp Extension: Auto-replace auth tokens to test privilege escalation
+Sensitive data logger | Burp Extension: Log all endpoints that return sensitive data patterns (SSN, email, credit card)
+
+# PoC
+CORS exploit | PoC: Demonstrate CORS misconfiguration stealing user data
+CSRF attack | PoC: CSRF attack on state-changing endpoints that lack anti-CSRF tokens
+
+# Custom
+// Add your own prompts below. Same format: Label | Prompt text

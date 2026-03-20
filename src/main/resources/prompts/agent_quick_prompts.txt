@@ -1,0 +1,44 @@
+// Quick prompts for the Agent sidebar.
+// Format: # Category Name, then Label | Prompt text per line.
+// Edit this file to add, remove, or reorder prompts.
+// Lines starting with // are comments and ignored.
+
+# RECON & SCOPE
+Scope status | what hosts are in scope and what's not?
+Map attack surface | list all endpoints grouped by functionality, highlight the ones with parameters and auth
+Interesting params | show me endpoints with query parameters that could be injectable
+Hidden endpoints | list endpoints that returned 403, 401, or 301 — potential access control bypasses
+Tech fingerprint | show the full tech stack detected and any interesting patterns
+Burp issues | list all issues found by Burp's scanner, grouped by severity
+
+# AUTH & SESSION
+Test auth bypass | send all authenticated endpoints to repeater without the auth headers to test for auth bypass
+Session analysis | analyze cookies and auth tokens — are they secure? httponly? samesite? predictable?
+JWT audit | check if there are JWT tokens — analyze algorithm, expiration, and generate a jwt-manipulator tool
+Privilege escalation | generate a Burp extension that replays requests swapping auth tokens between user roles
+
+# INJECTION & INPUT
+SQLi candidates | list endpoints with parameters likely vulnerable to SQL injection and send them to intruder
+XSS candidates | find endpoints that reflect user input in responses — potential XSS vectors
+Parameter fuzzer | generate a fuzzer script for all query parameters using SQLi, XSS and command injection payloads
+Mass assignment | find POST/PUT endpoints with JSON bodies — test for mass assignment by adding admin/role fields
+
+# IDOR & ACCESS CONTROL
+IDOR scan | find endpoints with sequential or predictable IDs and generate an IDOR scanner
+Horizontal privesc | identify endpoints that access user-specific resources — test accessing other users' data
+Forced browsing | generate a tool that brute-forces common admin paths and sensitive files on the target
+
+# API SECURITY
+API enumeration | list all API endpoints with their methods, params, and response codes
+Rate limit test | generate a script to test rate limiting on login and sensitive endpoints
+CORS check | check for CORS misconfigurations — test with arbitrary origins on all endpoints
+Verb tampering | send GET endpoints to repeater with PUT/DELETE/PATCH to test HTTP verb tampering
+
+# EXPLOIT & REPORT
+Generate all PoCs | generate proof-of-concept exploit scripts for all critical and high findings
+Full report | generate a detailed markdown pentest report with findings, evidence, and recommendations
+Active scan | start an active scan on all in-scope targets
+Traffic sniffer | generate and inject a JS traffic sniffer that captures all XHR/fetch requests in the browser
+
+# CUSTOM
+// Add your own prompts below. Same format: Label | Prompt text

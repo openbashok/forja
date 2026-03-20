@@ -7,6 +7,7 @@ import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider;
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.analysis.SecurityAnalyzer;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.traffic.TrafficCollector;
@@ -22,13 +23,15 @@ public class ForjaContextMenu implements ContextMenuItemsProvider {
     private final AppModel appModel;
     private final ConfigManager config;
     private final LLMProviderFactory providerFactory;
+    private final PromptManager promptManager;
 
     public ForjaContextMenu(MontoyaApi api, AppModel appModel, ConfigManager config,
-                            LLMProviderFactory providerFactory) {
+                            LLMProviderFactory providerFactory, PromptManager promptManager) {
         this.api = api;
         this.appModel = appModel;
         this.config = config;
         this.providerFactory = providerFactory;
+        this.promptManager = promptManager;
     }
 
     @Override
@@ -67,7 +70,7 @@ public class ForjaContextMenu implements ContextMenuItemsProvider {
                         + "\n\nRESPONSE:\n" + truncate(responseStr, 3000);
 
                 LLMResponse response = provider.chat(
-                        List.of(Message.system("You are a web security analyst. Analyze the request for vulnerabilities."),
+                        List.of(Message.system("You are a web security analyst. Analyze the request for vulnerabilities.\n\n" + promptManager.get("global_rules")),
                                 Message.user(prompt)),
                         config.getModel(), 2048
                 );
@@ -108,7 +111,7 @@ public class ForjaContextMenu implements ContextMenuItemsProvider {
                         + truncate(requestStr, 3000);
 
                 LLMResponse response = provider.chat(
-                        List.of(Message.system("You generate security testing PoC scripts in JavaScript using fetch API."),
+                        List.of(Message.system("You generate security testing PoC scripts in JavaScript using fetch API.\n\n" + promptManager.get("global_rules")),
                                 Message.user(prompt)),
                         config.getModel(), 2048
                 );

@@ -129,7 +129,7 @@ public class BurpAgent {
     }
 
     private String buildSystemPrompt() {
-        String basePrompt = promptManager.get("agent_system");
+        String basePrompt = promptManager.getWithRules("agent_system");
 
         StringBuilder sb = new StringBuilder(basePrompt);
 

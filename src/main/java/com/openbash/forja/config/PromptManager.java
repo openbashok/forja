@@ -22,6 +22,8 @@ public class PromptManager {
     private static final LinkedHashMap<String, PromptInfo> REGISTRY = new LinkedHashMap<>();
 
     static {
+        register("global_rules",       "prompts/global_rules.txt",       "Global Rules",
+                "Rules injected into ALL LLM calls. Proxy config, output format, safety constraints.");
         register("agent_system",       "prompts/agent_system.txt",       "Agent — Base System Prompt",
                 "Core instructions for the AI agent: response format, available tools, rules.");
         register("agent_mode_agent",   "prompts/agent_mode_agent.txt",   "Agent — Autonomous Mode",
@@ -36,6 +38,10 @@ public class PromptManager {
                 "Instructions for generating the runtime object/variable sniffer.");
         register("burp_generator",     "prompts/burp_generator.txt",     "Burp Extension Generator",
                 "Instructions for generating Jython Burp extensions.");
+        registerQuickPrompts("agent_quick_prompts",  "prompts/agent_quick_prompts.txt",  "Agent — Quick Prompts",
+                "Sidebar prompts for the Agent tab.");
+        registerQuickPrompts("toolkit_quick_prompts","prompts/toolkit_quick_prompts.txt","Toolkit — Quick Prompts",
+                "Dropdown prompts for the Toolkit tab.");
     }
 
     private final ConfigManager config;
@@ -52,6 +58,17 @@ public class PromptManager {
      */
     public String get(String key) {
         return cache.computeIfAbsent(key, this::load);
+    }
+
+    /**
+     * Get a system prompt with global rules appended.
+     * Use this for all LLM system messages so global rules are always included.
+     */
+    public String getWithRules(String key) {
+        String prompt = get(key);
+        String rules = get("global_rules");
+        if (rules == null || rules.isBlank()) return prompt;
+        return prompt + "\n\n" + rules;
     }
 
     /**
@@ -106,7 +123,7 @@ public class PromptManager {
      * Get all registered prompt keys and their info.
      */
     public Map<String, PromptInfo> getRegistry() {
-        return Map.copyOf(REGISTRY);
+        return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(REGISTRY));
     }
 
     /**
@@ -148,7 +165,11 @@ public class PromptManager {
     }
 
     private static void register(String key, String resourcePath, String displayName, String description) {
-        REGISTRY.put(key, new PromptInfo(key, resourcePath, displayName, description));
+        REGISTRY.put(key, new PromptInfo(key, resourcePath, displayName, description, false));
+    }
+
+    private static void registerQuickPrompts(String key, String resourcePath, String displayName, String description) {
+        REGISTRY.put(key, new PromptInfo(key, resourcePath, displayName, description, true));
     }
 
     /**
@@ -159,17 +180,20 @@ public class PromptManager {
         private final String resourcePath;
         private final String displayName;
         private final String description;
+        private final boolean quickPrompts;
 
-        PromptInfo(String key, String resourcePath, String displayName, String description) {
+        PromptInfo(String key, String resourcePath, String displayName, String description, boolean quickPrompts) {
             this.key = key;
             this.resourcePath = resourcePath;
             this.displayName = displayName;
             this.description = description;
+            this.quickPrompts = quickPrompts;
         }
 
         public String getKey() { return key; }
         public String getResourcePath() { return resourcePath; }
         public String getDisplayName() { return displayName; }
         public String getDescription() { return description; }
+        public boolean isQuickPrompts() { return quickPrompts; }
     }
 }

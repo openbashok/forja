@@ -25,7 +25,7 @@ public class SecurityAnalyzer {
     }
 
     public List<Finding> analyze(AppModel appModel) throws LLMException {
-        String systemPrompt = promptManager.get("analysis_system");
+        String systemPrompt = promptManager.getWithRules("analysis_system");
         String context = contextBuilder.buildContext(appModel);
 
         String userPrompt = "Analyze the following web application traffic for security vulnerabilities.\n\n" + context;

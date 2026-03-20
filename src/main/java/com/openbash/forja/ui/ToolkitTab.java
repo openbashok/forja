@@ -3,6 +3,7 @@ package com.openbash.forja.ui;
 import com.openbash.forja.analysis.Finding;
 import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.config.PromptManager;
+import com.openbash.forja.config.QuickPrompt;
 import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.toolkit.GeneratedTool;
@@ -41,6 +42,8 @@ public class ToolkitTab extends JPanel {
     private final JProgressBar progressBar;
     private final JButton injectBtn;
     private final List<GeneratedTool> tools = new ArrayList<>();
+    private DefaultComboBoxModel<String> examplesModel;
+    private List<String> promptValues;
 
     private Timer progressTimer;
     private int elapsedSeconds;
@@ -152,25 +155,16 @@ public class ToolkitTab extends JPanel {
             }
         });
 
-        // Example quick-picks dropdown
-        String[] examples = {
-                "-- Quick examples --",
-                "JS: Test IDOR on all endpoints with sequential IDs",
-                "JS: Replay authenticated requests and compare responses without auth",
-                "JS: Extract and decode all JWT tokens, check for weak algorithms",
-                "Python: Brute-force JWT secret using common wordlist",
-                "Python: Test all endpoints for rate limiting",
-                "Burp Extension: Auto-replace auth tokens to test privilege escalation",
-                "Burp Extension: Log all endpoints that return sensitive data patterns (SSN, email, credit card)",
-                "PoC: Demonstrate CORS misconfiguration stealing user data",
-                "PoC: CSRF attack on state-changing endpoints that lack anti-CSRF tokens"
-        };
-        JComboBox<String> examplesCombo = new JComboBox<>(examples);
+        // Quick-picks dropdown (loaded from PromptManager, editable in Prompts tab)
+        examplesModel = new DefaultComboBoxModel<>();
+        promptValues = new ArrayList<>();
+        loadQuickPicks();
+        JComboBox<String> examplesCombo = new JComboBox<>(examplesModel);
         ForjaTheme.styleComboBox(examplesCombo);
         examplesCombo.addActionListener(e -> {
             int idx = examplesCombo.getSelectedIndex();
-            if (idx > 0) {
-                promptArea.setText((String) examplesCombo.getSelectedItem());
+            if (idx > 0 && idx < promptValues.size()) {
+                promptArea.setText(promptValues.get(idx));
                 promptArea.setForeground(ForjaTheme.TEXT_DEFAULT);
                 promptArea.requestFocus();
                 examplesCombo.setSelectedIndex(0);
@@ -322,6 +316,30 @@ public class ToolkitTab extends JPanel {
      */
     public void setOnToolGenerated(Consumer<GeneratedTool> callback) {
         this.onToolGenerated = callback;
+    }
+
+    /** Reload the quick-picks dropdown from PromptManager (called when quick prompts are edited). */
+    public void reloadPrompts() {
+        promptManager.clearCache();
+        loadQuickPicks();
+    }
+
+    private void loadQuickPicks() {
+        examplesModel.removeAllElements();
+        promptValues.clear();
+        examplesModel.addElement("-- Quick examples --");
+        promptValues.add(null);
+        List<QuickPrompt> quickPrompts = QuickPrompt.parse(promptManager.get("toolkit_quick_prompts"));
+        String lastCategory = null;
+        for (QuickPrompt qp : quickPrompts) {
+            if (qp.isCategory()) {
+                lastCategory = qp.category();
+            } else {
+                String display = lastCategory != null ? "[" + lastCategory + "] " + qp.label() : qp.label();
+                examplesModel.addElement(display);
+                promptValues.add(qp.prompt());
+            }
+        }
     }
 
     /**

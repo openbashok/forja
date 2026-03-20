@@ -155,7 +155,7 @@ public class ConfigTab extends JPanel {
 
     private void save() {
         config.setProvider((String) providerCombo.getSelectedItem());
-        config.setApiKey(new String(apiKeyField.getPassword()));
+        config.setApiKey(new String(apiKeyField.getPassword()).trim());
         config.setModel((String) modelCombo.getSelectedItem());
         config.setCustomEndpoint(customEndpointField.getText().trim());
         try {

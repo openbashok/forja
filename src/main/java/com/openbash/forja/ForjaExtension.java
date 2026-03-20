@@ -57,10 +57,17 @@ public class ForjaExtension implements BurpExtension {
                 scopeTracker);
         BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, promptManager, appModel,
                 analysisTab::getFindings, actionExecutor);
-        AgentTab agentTab = new AgentTab(burpAgent, config);
+        AgentTab agentTab = new AgentTab(burpAgent, config, promptManager);
 
         // Sync: tools generated in Toolkit tab appear in Agent tab
         toolkitTab.setOnToolGenerated(actionExecutor::addGeneratedTool);
+
+        // Prompts tab with callback to reload quick prompts in other tabs
+        PromptsTab promptsTab = new PromptsTab(promptManager, providerFactory, config);
+        promptsTab.setOnQuickPromptsChanged(() -> SwingUtilities.invokeLater(() -> {
+            agentTab.reloadPrompts();
+            toolkitTab.reloadPrompts();
+        }));
 
         JTabbedPane tabbedPane = new JTabbedPane();
         tabbedPane.addTab("Config", configTab);
@@ -68,7 +75,7 @@ public class ForjaExtension implements BurpExtension {
         tabbedPane.addTab("Analysis", analysisTab);
         tabbedPane.addTab("Generated Toolkit", toolkitTab);
         tabbedPane.addTab("Agent", agentTab);
-        tabbedPane.addTab("Prompts", new PromptsTab(promptManager));
+        tabbedPane.addTab("Prompts", promptsTab);
 
         // Main panel: tabs + cost status bar
         JPanel mainPanel = new JPanel(new BorderLayout());
@@ -79,7 +86,7 @@ public class ForjaExtension implements BurpExtension {
 
         // Context menu
         api.userInterface().registerContextMenuItemsProvider(
-                new ForjaContextMenu(api, appModel, config, providerFactory));
+                new ForjaContextMenu(api, appModel, config, providerFactory, promptManager));
 
         // Passive scan check
         api.scanner().registerScanCheck(new ForjaScanCheck());

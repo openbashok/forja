@@ -5,6 +5,8 @@ import com.openbash.forja.agent.AgentMode;
 import com.openbash.forja.agent.AgentResponse;
 import com.openbash.forja.agent.BurpAgent;
 import com.openbash.forja.config.ConfigManager;
+import com.openbash.forja.config.PromptManager;
+import com.openbash.forja.config.QuickPrompt;
 import com.openbash.forja.toolkit.GeneratedTool;
 
 import javax.swing.*;
@@ -22,6 +24,7 @@ public class AgentTab extends JPanel {
 
     private final BurpAgent agent;
     private final ConfigManager config;
+    private final PromptManager promptManager;
     private JTextPane chatPane;
     private JTextField inputField;
     private JButton sendBtn;
@@ -36,6 +39,7 @@ public class AgentTab extends JPanel {
     private JTextArea codeViewer;
     private JTextField pathField;
 
+    private JSplitPane mainSplit;
     private Timer progressTimer;
     private int elapsedSeconds;
     private int lastKnownToolCount = 0;
@@ -77,49 +81,10 @@ public class AgentTab extends JPanel {
     private static final Font SIDEBAR_TITLE = ForjaTheme.FONT_TITLE;
     private static final String PLACEHOLDER = "Type a command...";
 
-    // Predefined prompts: {null, "CATEGORY"} for headers, {label, prompt} for actions
-    private static final String[][] PROMPTS = {
-            {null, "RECON & SCOPE"},
-            {"Scope status", "what hosts are in scope and what's not?"},
-            {"Map attack surface", "list all endpoints grouped by functionality, highlight the ones with parameters and auth"},
-            {"Interesting params", "show me endpoints with query parameters that could be injectable"},
-            {"Hidden endpoints", "list endpoints that returned 403, 401, or 301 — potential access control bypasses"},
-            {"Tech fingerprint", "show the full tech stack detected and any interesting patterns"},
-            {"Burp issues", "list all issues found by Burp's scanner, grouped by severity"},
-
-            {null, "AUTH & SESSION"},
-            {"Test auth bypass", "send all authenticated endpoints to repeater without the auth headers to test for auth bypass"},
-            {"Session analysis", "analyze cookies and auth tokens — are they secure? httponly? samesite? predictable?"},
-            {"JWT audit", "check if there are JWT tokens — analyze algorithm, expiration, and generate a jwt-manipulator tool"},
-            {"Privilege escalation", "generate a Burp extension that replays requests swapping auth tokens between user roles"},
-
-            {null, "INJECTION & INPUT"},
-            {"SQLi candidates", "list endpoints with parameters likely vulnerable to SQL injection and send them to intruder"},
-            {"XSS candidates", "find endpoints that reflect user input in responses — potential XSS vectors"},
-            {"Parameter fuzzer", "generate a fuzzer script for all query parameters using SQLi, XSS and command injection payloads"},
-            {"Mass assignment", "find POST/PUT endpoints with JSON bodies — test for mass assignment by adding admin/role fields"},
-
-            {null, "IDOR & ACCESS CONTROL"},
-            {"IDOR scan", "find endpoints with sequential or predictable IDs and generate an IDOR scanner"},
-            {"Horizontal privesc", "identify endpoints that access user-specific resources — test accessing other users' data"},
-            {"Forced browsing", "generate a tool that brute-forces common admin paths and sensitive files on the target"},
-
-            {null, "API SECURITY"},
-            {"API enumeration", "list all API endpoints with their methods, params, and response codes"},
-            {"Rate limit test", "generate a script to test rate limiting on login and sensitive endpoints"},
-            {"CORS check", "check for CORS misconfigurations — test with arbitrary origins on all endpoints"},
-            {"Verb tampering", "send GET endpoints to repeater with PUT/DELETE/PATCH to test HTTP verb tampering"},
-
-            {null, "EXPLOIT & REPORT"},
-            {"Generate all PoCs", "generate proof-of-concept exploit scripts for all critical and high findings"},
-            {"Full report", "generate a detailed markdown pentest report with findings, evidence, and recommendations"},
-            {"Active scan", "start an active scan on all in-scope targets"},
-            {"Traffic sniffer", "generate and inject a JS traffic sniffer that captures all XHR/fetch requests in the browser"},
-    };
-
-    public AgentTab(BurpAgent agent, ConfigManager config) {
+    public AgentTab(BurpAgent agent, ConfigManager config, PromptManager promptManager) {
         this.agent = agent;
         this.config = config;
+        this.promptManager = promptManager;
         this.outputDir = initOutputDir();
         setLayout(new BorderLayout());
         setBackground(BG_DARK);
@@ -140,7 +105,7 @@ public class AgentTab extends JPanel {
         rightSplit.setBorder(BorderFactory.createEmptyBorder());
         rightSplit.setContinuousLayout(true);
 
-        JSplitPane mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSidebar, rightSplit);
+        mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftSidebar, rightSplit);
         mainSplit.setDividerSize(4);
         mainSplit.setBorder(BorderFactory.createEmptyBorder());
         mainSplit.setContinuousLayout(true);
@@ -186,6 +151,14 @@ public class AgentTab extends JPanel {
         return outputDir;
     }
 
+    /** Rebuild the prompts sidebar from PromptManager (called when quick prompts are edited). */
+    public void reloadPrompts() {
+        promptManager.clearCache();
+        int dividerLocation = mainSplit.getDividerLocation();
+        mainSplit.setLeftComponent(buildPromptsSidebar());
+        mainSplit.setDividerLocation(dividerLocation);
+    }
+
     private void autoSaveFile(GeneratedTool tool) {
         String filename = tool.getName().replaceAll("[^a-zA-Z0-9._-]", "_") + fileExtension(tool.getLanguage());
         Path filePath = outputDir.resolve(filename);
@@ -207,16 +180,17 @@ public class AgentTab extends JPanel {
         promptsSection.setBackground(BG_SIDEBAR);
         promptsSection.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
 
-        for (String[] prompt : PROMPTS) {
-            if (prompt[0] == null) {
-                JLabel cat = new JLabel("  " + prompt[1]);
+        List<QuickPrompt> prompts = QuickPrompt.parse(promptManager.get("agent_quick_prompts"));
+        for (QuickPrompt qp : prompts) {
+            if (qp.isCategory()) {
+                JLabel cat = new JLabel("  " + qp.category());
                 cat.setFont(SIDEBAR_TITLE);
                 cat.setForeground(ACCENT_GREEN);
                 cat.setAlignmentX(LEFT_ALIGNMENT);
                 cat.setBorder(BorderFactory.createEmptyBorder(10, 8, 4, 8));
                 promptsSection.add(cat);
             } else {
-                promptsSection.add(createPromptButton(prompt[0], prompt[1]));
+                promptsSection.add(createPromptButton(qp.label(), qp.prompt()));
             }
         }
 
@@ -666,10 +640,32 @@ public class AgentTab extends JPanel {
         stopBtn.setVisible(true);
         stopRequested = false;
 
-        currentWorker = new SwingWorker<AgentResponse, Void>() {
+        currentWorker = new SwingWorker<Void, AgentUpdate>() {
             @Override
-            protected AgentResponse doInBackground() throws Exception {
-                return agent.processUserMessage(text);
+            protected Void doInBackground() throws Exception {
+                AgentResponse response = agent.processUserMessage(text);
+                publish(new AgentUpdate(response, 1));
+
+                // Execute actions on background thread (may involve LLM calls, network, etc.)
+                for (AgentAction action : response.getActions()) {
+                    if (stopRequested) break;
+                    String result = agent.executeAction(action);
+                    publish(new AgentUpdate(action, result));
+                }
+                return null;
+            }
+
+            @Override
+            protected void process(List<AgentUpdate> updates) {
+                for (AgentUpdate update : updates) {
+                    if (update.response != null) {
+                        appendAgent(update.response.getResponse());
+                    }
+                    if (update.action != null) {
+                        appendAction(update.action.getTool(), update.actionResult);
+                    }
+                }
+                refreshFilesList();
             }
 
             @Override
@@ -680,10 +676,7 @@ public class AgentTab extends JPanel {
                     stopProgress("Cancelled");
                 } else {
                     try {
-                        AgentResponse response = get();
-                        appendAgent(response.getResponse());
-                        executeActions(response.getActions());
-                        refreshFilesList();
+                        get(); // propagate exceptions
                         stopProgress("Ready");
                     } catch (Exception e) {
                         String msg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
@@ -794,13 +787,6 @@ public class AgentTab extends JPanel {
         inputField.setEnabled(enabled);
         sendBtn.setEnabled(enabled);
         if (enabled) inputField.requestFocus();
-    }
-
-    private void executeActions(List<AgentAction> actions) {
-        for (AgentAction action : actions) {
-            String result = agent.executeAction(action);
-            appendAction(action.getTool(), result);
-        }
     }
 
     private static class AgentUpdate {

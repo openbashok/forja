@@ -133,7 +133,8 @@ public class ToolkitGenerator {
                 + "- Keep code concise and self-contained in a single file — NO placeholder functions or TODOs\n\n"
                 + "Output the complete code wrapped in a fenced code block with the language tag "
                 + "(```javascript, ```python, etc.).\n"
-                + "Before the code block, write a one-line description of the tool.";
+                + "Before the code block, write a one-line description of the tool.\n\n"
+                + promptManager.get("global_rules");
 
         LLMResponse response = provider.chat(
                 List.of(Message.system(systemPrompt), Message.user(prompt.toString())),

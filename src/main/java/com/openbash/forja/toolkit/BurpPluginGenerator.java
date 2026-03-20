@@ -25,7 +25,7 @@ public class BurpPluginGenerator {
     }
 
     public GeneratedTool generate(AppModel appModel, List<Finding> findings, String toolType) throws LLMException {
-        String systemPrompt = promptManager.get("burp_generator");
+        String systemPrompt = promptManager.getWithRules("burp_generator");
 
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("Generate a ").append(toolType).append(" Burp Suite extension in Python (Jython).\n\n");
