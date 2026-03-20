@@ -12,6 +12,7 @@ import com.openbash.forja.integration.ForjaScanCheck;
 import com.openbash.forja.integration.ScriptInjector;
 import com.openbash.forja.llm.CostTracker;
 import com.openbash.forja.llm.LLMProviderFactory;
+import com.openbash.forja.toolkit.ClaudeCodeIntegration;
 import com.openbash.forja.toolkit.ToolkitGenerator;
 import com.openbash.forja.traffic.AppModel;
 import com.openbash.forja.traffic.ResourceStore;
@@ -63,6 +64,10 @@ public class ForjaExtension implements BurpExtension {
         BurpAgent burpAgent = new BurpAgent(api, providerFactory, config, promptManager, appModel,
                 analysisTab::getFindings, actionExecutor);
         AgentTab agentTab = new AgentTab(burpAgent, config, promptManager);
+
+        // Claude Code integration for deep analysis
+        ClaudeCodeIntegration claudeCode = new ClaudeCodeIntegration(config, promptManager, appModel, resourceStore);
+        agentTab.setClaudeCodeIntegration(claudeCode);
 
         // Sync: tools generated in Toolkit tab appear in Agent tab
         toolkitTab.setOnToolGenerated(actionExecutor::addGeneratedTool);

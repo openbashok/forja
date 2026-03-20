@@ -38,6 +38,8 @@ public class PromptManager {
                 "Instructions for generating the runtime object/variable sniffer.");
         register("burp_generator",     "prompts/burp_generator.txt",     "Burp Extension Generator",
                 "Instructions for generating Jython Burp extensions.");
+        register("claude_code_agent", "prompts/forja_agent_prompt.md",  "Claude Code — Deep Analysis",
+                "System prompt for Claude Code deep traffic analysis (claude -p).");
         registerQuickPrompts("agent_quick_prompts",  "prompts/agent_quick_prompts.txt",  "Agent — Quick Prompts",
                 "Sidebar prompts for the Agent tab.");
         registerQuickPrompts("toolkit_quick_prompts","prompts/toolkit_quick_prompts.txt","Toolkit — Quick Prompts",

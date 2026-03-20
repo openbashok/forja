@@ -124,6 +124,14 @@ public class BurpAgent {
         return actionExecutor.getGeneratedTools();
     }
 
+    public void addGeneratedTool(GeneratedTool tool) {
+        actionExecutor.addGeneratedTool(tool);
+    }
+
+    public List<Finding> getLastFindings() {
+        return findingsSupplier.get();
+    }
+
     public void updateGeneratedTool(int index, GeneratedTool updated) {
         actionExecutor.updateGeneratedTool(index, updated);
     }

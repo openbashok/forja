@@ -7,6 +7,7 @@ import com.openbash.forja.agent.BurpAgent;
 import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.config.QuickPrompt;
+import com.openbash.forja.toolkit.ClaudeCodeIntegration;
 import com.openbash.forja.toolkit.GeneratedTool;
 
 import javax.swing.*;
@@ -49,6 +50,9 @@ public class AgentTab extends JPanel {
     // Output directory for auto-saving generated files (mutable, persisted in config)
     private Path outputDir;
 
+    // Claude Code integration
+    private volatile ClaudeCodeIntegration claudeCode;
+
     // Interactive shell
     private volatile Process runningProcess;
     private volatile java.io.OutputStream processStdin;
@@ -88,6 +92,10 @@ public class AgentTab extends JPanel {
     private static final Font SIDEBAR_FONT = ForjaTheme.FONT_UI_SMALL;
     private static final Font SIDEBAR_TITLE = ForjaTheme.FONT_TITLE;
     private static final String PLACEHOLDER = "Type a command...";
+
+    public void setClaudeCodeIntegration(ClaudeCodeIntegration claudeCode) {
+        this.claudeCode = claudeCode;
+    }
 
     public AgentTab(BurpAgent agent, ConfigManager config, PromptManager promptManager) {
         this.agent = agent;
@@ -309,6 +317,21 @@ public class AgentTab extends JPanel {
         stopBtn.setVisible(false);
         stopBtn.addActionListener(e -> requestStop());
         left.add(stopBtn);
+
+        left.add(Box.createHorizontalStrut(8));
+
+        // Deep Analysis button — launches Claude Code
+        JButton deepBtn = new JButton("Deep Analysis");
+        deepBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 11));
+        deepBtn.setForeground(Color.WHITE);
+        deepBtn.setBackground(new Color(180, 100, 20)); // orange-brown
+        deepBtn.setFocusPainted(false);
+        deepBtn.setBorderPainted(false);
+        deepBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        deepBtn.setPreferredSize(new Dimension(120, 24));
+        deepBtn.setToolTipText("Launch Claude Code for deep traffic analysis (generates PoCs, sniffers, Burp plugins)");
+        deepBtn.addActionListener(e -> launchDeepAnalysis());
+        left.add(deepBtn);
 
         toolbar.add(left, BorderLayout.WEST);
 
@@ -847,8 +870,76 @@ public class AgentTab extends JPanel {
         if (currentWorker != null) {
             currentWorker.cancel(true);
         }
+        ClaudeCodeIntegration cc = this.claudeCode;
+        if (cc != null) {
+            cc.stop();
+        }
         stopBtn.setVisible(false);
         statusLabel.setText("Stopping...");
+    }
+
+    private void launchDeepAnalysis() {
+        ClaudeCodeIntegration cc = this.claudeCode;
+        if (cc == null) {
+            appendError("Claude Code integration not configured.");
+            return;
+        }
+        if (cc.isRunning()) {
+            appendError("Claude Code is already running. Stop it first.");
+            return;
+        }
+
+        // Optional: ask user for extra instructions
+        String extraPrompt = JOptionPane.showInputDialog(this,
+                "Extra instructions for Claude Code (optional):",
+                "Deep Analysis — Claude Code",
+                JOptionPane.PLAIN_MESSAGE);
+        // null means cancelled
+        if (extraPrompt == null) return;
+
+        appendAgent("Launching Claude Code deep analysis...");
+        startProgress("Claude Code running");
+        setInputEnabled(false);
+        stopBtn.setVisible(true);
+
+        new Thread(() -> {
+            try {
+                cc.run(
+                        agent.getLastFindings(),
+                        extraPrompt.isBlank() ? null : extraPrompt,
+                        // Output callback — runs on background thread, post to EDT
+                        line -> SwingUtilities.invokeLater(() -> {
+                            appendStyled(line + "\n", CHAT_FONT, TEXT_ACTION_RESULT);
+                            // Auto-scroll
+                            chatPane.setCaretPosition(chatPane.getDocument().getLength());
+                        }),
+                        // Completion callback
+                        tools -> SwingUtilities.invokeLater(() -> {
+                            stopProgress("Deep analysis complete");
+                            setInputEnabled(true);
+                            stopBtn.setVisible(false);
+
+                            if (!tools.isEmpty()) {
+                                appendAgent("Generated " + tools.size() + " artifacts. Check the files panel.");
+                                for (GeneratedTool tool : tools) {
+                                    agent.addGeneratedTool(tool);
+                                    autoSaveFile(tool);
+                                }
+                                refreshFilesList();
+                            } else {
+                                appendAgent("No artifacts generated. Check the output above.");
+                            }
+                        })
+                );
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> {
+                    stopProgress("Error");
+                    setInputEnabled(true);
+                    stopBtn.setVisible(false);
+                    appendError("Failed to launch Claude Code: " + e.getMessage());
+                });
+            }
+        }, "claude-code-launcher").start();
     }
 
     private void setInputEnabled(boolean enabled) {
