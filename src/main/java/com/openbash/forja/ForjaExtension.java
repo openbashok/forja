@@ -14,6 +14,7 @@ import com.openbash.forja.llm.CostTracker;
 import com.openbash.forja.llm.LLMProviderFactory;
 import com.openbash.forja.toolkit.ToolkitGenerator;
 import com.openbash.forja.traffic.AppModel;
+import com.openbash.forja.traffic.ResourceStore;
 import com.openbash.forja.traffic.TrafficCollector;
 import com.openbash.forja.ui.*;
 
@@ -34,8 +35,12 @@ public class ForjaExtension implements BurpExtension {
         AppModel appModel = new AppModel();
         appModel.setMaxEntries(config.getMaxTrafficEntries());
 
+        // Resource store — saves full captured traffic to disk
+        ResourceStore resourceStore = new ResourceStore(config);
+
         // Traffic collector
         TrafficCollector collector = new TrafficCollector(api, appModel);
+        collector.setResourceStore(resourceStore);
         api.proxy().registerRequestHandler(collector);
         api.proxy().registerResponseHandler(collector);
 

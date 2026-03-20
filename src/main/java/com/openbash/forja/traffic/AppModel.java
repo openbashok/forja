@@ -13,8 +13,10 @@ public class AppModel {
 
     /** JavaScript source code captured from proxy traffic: URL → source content. */
     private final ConcurrentHashMap<String, String> jsSources = new ConcurrentHashMap<>();
-    private static final int MAX_JS_SOURCES = 30;
-    private static final int MAX_JS_SIZE = 50_000; // 50KB per file
+
+    /** Detected crypto patterns across all traffic. */
+    private final List<CryptoDetector.CryptoFinding> cryptoFindings =
+            Collections.synchronizedList(new ArrayList<>());
 
     private volatile int maxEntries = 500;
 
@@ -48,11 +50,10 @@ public class AppModel {
 
     /**
      * Store captured JavaScript source code from proxy traffic.
-     * Skips minified mega-files (single line > 5000 chars) and vendor/library code.
+     * No size limits — full content saved. Skips vendor/library code.
      */
     public void addJsSource(String url, String content) {
         if (content == null || content.isBlank()) return;
-        if (jsSources.size() >= MAX_JS_SOURCES && !jsSources.containsKey(url)) return;
 
         // Skip vendor/library code
         String urlLower = url.toLowerCase();
@@ -65,12 +66,15 @@ public class AppModel {
             return;
         }
 
-        // Truncate if too large
-        String source = content.length() > MAX_JS_SIZE
-                ? content.substring(0, MAX_JS_SIZE) + "\n// [truncated by Forja]"
-                : content;
+        jsSources.put(url, content);
+    }
 
-        jsSources.put(url, source);
+    public void addCryptoFinding(CryptoDetector.CryptoFinding finding) {
+        cryptoFindings.add(finding);
+    }
+
+    public List<CryptoDetector.CryptoFinding> getCryptoFindings() {
+        return Collections.unmodifiableList(new ArrayList<>(cryptoFindings));
     }
 
     public Map<String, String> getJsSources() { return Collections.unmodifiableMap(jsSources); }
@@ -90,6 +94,7 @@ public class AppModel {
         techStack.clear();
         interestingPatterns.clear();
         jsSources.clear();
+        cryptoFindings.clear();
     }
 
     private void evictLeastSeen() {

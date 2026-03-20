@@ -26,11 +26,19 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
     private final MontoyaApi api;
     private final AppModel appModel;
     private final PatternDetector patternDetector;
+    private final CryptoDetector cryptoDetector;
+    private volatile ResourceStore resourceStore;
 
     public TrafficCollector(MontoyaApi api, AppModel appModel) {
         this.api = api;
         this.appModel = appModel;
         this.patternDetector = new PatternDetector();
+        this.cryptoDetector = new CryptoDetector();
+    }
+
+    /** Set ResourceStore for persisting full resources to disk. */
+    public void setResourceStore(ResourceStore resourceStore) {
+        this.resourceStore = resourceStore;
     }
 
     @Override
@@ -120,10 +128,26 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         Set<String> tech = patternDetector.detectTechStack(respHeaders, appModel.getCookies());
         tech.forEach(appModel::addTechStack);
 
-        // Sample request/response (keep first or update if auth present)
+        // Full request/response — no truncation
+        String fullRequest = request.toString();
+        String fullResponse = response.toString();
         if (endpoint.getSampleRequest() == null || endpoint.getAuthInfo() != null) {
-            endpoint.setSampleRequest(truncate(request.toString(), 2000));
-            endpoint.setSampleResponse(truncate(response.toString(), 2000));
+            endpoint.setSampleRequest(fullRequest);
+            endpoint.setSampleResponse(fullResponse);
+        }
+
+        // Save full request/response to disk
+        ResourceStore store = this.resourceStore;
+        if (store != null) {
+            store.saveRequestResponse(method, pathPattern, fullRequest, fullResponse);
+        }
+
+        // Save HTML to disk
+        if (ct != null && ct.toLowerCase().contains("html")) {
+            String htmlBody = response.bodyToString();
+            if (store != null && htmlBody != null && !htmlBody.isBlank()) {
+                store.saveHtml(url, fullResponse);
+            }
         }
 
         // Pattern detection
@@ -131,6 +155,18 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         String bodyStr = response.bodyToString();
         List<String> patterns = patternDetector.detectPatterns(headerStr, bodyStr, url);
         patterns.forEach(appModel::addInterestingPattern);
+
+        // Crypto detection
+        String reqBody = request.bodyToString();
+        List<CryptoDetector.CryptoFinding> cryptoFindings = cryptoDetector.analyze(
+                url, headerStr, reqBody, response.headers().toString(), bodyStr);
+        for (CryptoDetector.CryptoFinding cf : cryptoFindings) {
+            appModel.addCryptoFinding(cf);
+            appModel.addInterestingPattern("Crypto: " + cf.getDescription());
+            if (store != null) {
+                store.saveCryptoSample(cf.getDescription(), cf.getSample());
+            }
+        }
 
         // Reflected params
         List<String> reflected = patternDetector.extractReflectedParams(url, bodyStr);
@@ -155,6 +191,10 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
 
                 String url = request.url();
                 if (!api.scope().isInScope(url)) continue;
+
+                // Capture JavaScript before filtering static assets
+                captureJavaScriptFromHistory(url, response);
+
                 if (isStaticAsset(url)) continue;
 
                 processHistoryItem(request, response, url);
@@ -169,9 +209,6 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
     }
 
     private void processHistoryItem(HttpRequest request, HttpResponse response, String url) {
-        // Capture JavaScript source code before filtering
-        captureJavaScriptFromHistory(url, response);
-
         String method = request.method();
         String path = extractPath(url);
         String pathPattern = normalizePath(path);
@@ -223,10 +260,25 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         Set<String> tech = patternDetector.detectTechStack(respHeaders, appModel.getCookies());
         tech.forEach(appModel::addTechStack);
 
-        // Sample request/response
+        // Full request/response — no truncation
+        String fullRequest = request.toString();
+        String fullResponse = response.toString();
         if (endpoint.getSampleRequest() == null || endpoint.getAuthInfo() != null) {
-            endpoint.setSampleRequest(truncate(request.toString(), 2000));
-            endpoint.setSampleResponse(truncate(response.toString(), 2000));
+            endpoint.setSampleRequest(fullRequest);
+            endpoint.setSampleResponse(fullResponse);
+        }
+
+        // Save full request/response to disk
+        ResourceStore store = this.resourceStore;
+        if (store != null) {
+            store.saveRequestResponse(method, pathPattern, fullRequest, fullResponse);
+        }
+
+        // Save HTML to disk
+        if (ct != null && ct.toLowerCase().contains("html")) {
+            if (store != null) {
+                store.saveHtml(url, fullResponse);
+            }
         }
 
         // Pattern detection
@@ -234,6 +286,18 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         String bodyStr = response.bodyToString();
         List<String> patterns = patternDetector.detectPatterns(headerStr, bodyStr, url);
         patterns.forEach(appModel::addInterestingPattern);
+
+        // Crypto detection
+        String reqBody = request.bodyToString();
+        List<CryptoDetector.CryptoFinding> cryptoFindings = cryptoDetector.analyze(
+                url, headerStr, reqBody, response.headers().toString(), bodyStr);
+        for (CryptoDetector.CryptoFinding cf : cryptoFindings) {
+            appModel.addCryptoFinding(cf);
+            appModel.addInterestingPattern("Crypto: " + cf.getDescription());
+            if (store != null) {
+                store.saveCryptoSample(cf.getDescription(), cf.getSample());
+            }
+        }
 
         // Reflected params
         List<String> reflected = patternDetector.extractReflectedParams(url, bodyStr);
@@ -278,11 +342,6 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         return STATIC_ASSET.matcher(path).find();
     }
 
-    private String truncate(String s, int maxLen) {
-        if (s == null) return null;
-        return s.length() <= maxLen ? s : s.substring(0, maxLen) + "\n[truncated]";
-    }
-
     /**
      * Capture JavaScript from proxy responses:
      * - Standalone .js files (Content-Type: javascript)
@@ -305,10 +364,17 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
             if (body == null || body.isBlank()) return;
 
             if (ctLower.contains("javascript")) {
-                // Standalone JS file
                 appModel.addJsSource(url, body);
+                ResourceStore store = this.resourceStore;
+                if (store != null) store.saveJavaScript(url, body);
+                // Crypto analysis on JS source
+                List<CryptoDetector.CryptoFinding> jsCrypto = cryptoDetector.analyzeJavaScript(url, body);
+                for (CryptoDetector.CryptoFinding cf : jsCrypto) {
+                    appModel.addCryptoFinding(cf);
+                    appModel.addInterestingPattern("Crypto: " + cf.getDescription());
+                    if (store != null) store.saveCryptoSample(cf.getDescription(), cf.getSample());
+                }
             } else if (ctLower.contains("html")) {
-                // Extract inline <script> blocks from HTML
                 extractInlineScripts(url, body);
             }
         } catch (Exception ignored) {}
@@ -325,6 +391,14 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
 
             if (ctLower.contains("javascript")) {
                 appModel.addJsSource(url, body);
+                ResourceStore store = this.resourceStore;
+                if (store != null) store.saveJavaScript(url, body);
+                List<CryptoDetector.CryptoFinding> jsCrypto = cryptoDetector.analyzeJavaScript(url, body);
+                for (CryptoDetector.CryptoFinding cf : jsCrypto) {
+                    appModel.addCryptoFinding(cf);
+                    appModel.addInterestingPattern("Crypto: " + cf.getDescription());
+                    if (store != null) store.saveCryptoSample(cf.getDescription(), cf.getSample());
+                }
             } else if (ctLower.contains("html")) {
                 extractInlineScripts(url, body);
             }
@@ -337,11 +411,13 @@ public class TrafficCollector implements ProxyRequestHandler, ProxyResponseHandl
         while (matcher.find()) {
             String script = matcher.group(1).trim();
             if (script.length() >= MIN_INLINE_JS_LENGTH) {
-                // Skip scripts that are just src= references (empty body with src attribute)
                 String tag = matcher.group(0);
                 if (tag.contains(" src=") && script.isEmpty()) continue;
 
-                appModel.addJsSource(pageUrl + "#inline-" + index, script);
+                String scriptUrl = pageUrl + "#inline-" + index;
+                appModel.addJsSource(scriptUrl, script);
+                ResourceStore store = this.resourceStore;
+                if (store != null) store.saveJavaScript(scriptUrl, script);
                 index++;
             }
         }

@@ -5,6 +5,7 @@ import com.openbash.forja.config.ConfigManager;
 import com.openbash.forja.config.PromptManager;
 import com.openbash.forja.llm.*;
 import com.openbash.forja.traffic.AppModel;
+import com.openbash.forja.traffic.CryptoDetector;
 
 import java.util.List;
 
@@ -27,16 +28,16 @@ public class JSGenerator {
         StringBuilder userPrompt = new StringBuilder();
         userPrompt.append("Generate a ").append(toolType).append(" JavaScript script.\n\n");
 
-        // Rich application context
+        // Full application context
         userPrompt.append("## Application Context\n\n");
         userPrompt.append("- Endpoints: ").append(appModel.getEndpointCount()).append("\n");
         userPrompt.append("- Tech stack: ").append(String.join(", ", appModel.getTechStack())).append("\n");
         userPrompt.append("- Auth patterns: ").append(appModel.getAuthPatterns()).append("\n");
         userPrompt.append("- Cookies: ").append(String.join(", ", appModel.getCookies())).append("\n\n");
 
-        // Detailed endpoints with params, headers, response codes
+        // ALL endpoints — no limit
         userPrompt.append("## Endpoints (detailed)\n\n");
-        appModel.getEndpoints().values().stream().limit(20).forEach(ep -> {
+        for (var ep : appModel.getEndpoints().values()) {
             userPrompt.append("### ").append(ep.getMethod()).append(" ").append(ep.getPathPattern()).append("\n");
             if (!ep.getQueryParams().isEmpty())
                 userPrompt.append("  Query params: ").append(String.join(", ", ep.getQueryParams())).append("\n");
@@ -46,30 +47,50 @@ public class JSGenerator {
                 userPrompt.append("  Response codes: ").append(ep.getResponseCodes()).append("\n");
             if (ep.getContentType() != null)
                 userPrompt.append("  Content-Type: ").append(ep.getContentType()).append("\n");
+            if (ep.getSampleRequest() != null)
+                userPrompt.append("  Sample request:\n```\n").append(ep.getSampleRequest()).append("\n```\n");
+            if (ep.getSampleResponse() != null)
+                userPrompt.append("  Sample response:\n```\n").append(ep.getSampleResponse()).append("\n```\n");
             userPrompt.append("\n");
-        });
+        }
 
-        // Security findings
+        // Security findings — full evidence
         if (!findings.isEmpty()) {
             userPrompt.append("## Security Findings\n\n");
             for (Finding f : findings) {
                 userPrompt.append("- [").append(f.getSeverity()).append("] ").append(f.getTitle())
                         .append(" (").append(String.join(", ", f.getAffectedEndpoints())).append(")\n");
                 if (!f.getEvidence().isEmpty())
-                    userPrompt.append("  Evidence: ").append(f.getEvidence(), 0, Math.min(200, f.getEvidence().length())).append("\n");
+                    userPrompt.append("  Evidence: ").append(f.getEvidence()).append("\n");
+                if (!f.getDescription().isEmpty())
+                    userPrompt.append("  Description: ").append(f.getDescription()).append("\n");
+                if (!f.getRecommendation().isEmpty())
+                    userPrompt.append("  Recommendation: ").append(f.getRecommendation()).append("\n");
             }
             userPrompt.append("\n");
         }
 
-        // Interesting patterns
+        // ALL interesting patterns — no limit
         if (!appModel.getInterestingPatterns().isEmpty()) {
             userPrompt.append("## Interesting Patterns\n\n");
-            appModel.getInterestingPatterns().stream().limit(20).forEach(p ->
+            appModel.getInterestingPatterns().forEach(p ->
                     userPrompt.append("- ").append(p).append("\n"));
             userPrompt.append("\n");
         }
 
-        // THE KEY: actual JavaScript source code from the application
+        // Crypto findings
+        var cryptoFindings = appModel.getCryptoFindings();
+        if (!cryptoFindings.isEmpty()) {
+            userPrompt.append("## Detected Cryptographic Patterns\n\n");
+            for (CryptoDetector.CryptoFinding cf : cryptoFindings) {
+                userPrompt.append("- [").append(cf.getType()).append("] ").append(cf.getDescription()).append("\n");
+                userPrompt.append("  URL: ").append(cf.getUrl()).append("\n");
+                userPrompt.append("  Sample: ").append(cf.getSample()).append("\n");
+            }
+            userPrompt.append("\n");
+        }
+
+        // Full JavaScript source code — no budget limit
         appendJsSources(userPrompt, appModel);
 
         LLMResponse response = provider.chat(
@@ -93,8 +114,7 @@ public class JSGenerator {
     }
 
     /**
-     * Append the application's actual JavaScript source code to the prompt.
-     * Budget: ~30K chars total for JS sources to stay within token limits.
+     * Append ALL JavaScript source code to the prompt — no budget limit.
      */
     private void appendJsSources(StringBuilder sb, AppModel appModel) {
         var jsSources = appModel.getJsSources();
@@ -108,15 +128,7 @@ public class JSGenerator {
         sb.append("storage patterns, auth flows, and data structures. Your generated script must target THESE specific ");
         sb.append("objects and patterns — not generic ones.\n\n");
 
-        int totalBudget = 30_000;
-        int used = 0;
-
         for (var entry : jsSources.entrySet()) {
-            if (used >= totalBudget) {
-                sb.append("// ... ").append(jsSources.size()).append(" files total, remaining omitted for token budget\n\n");
-                break;
-            }
-
             String url = entry.getKey();
             String source = entry.getValue();
 
@@ -127,18 +139,11 @@ public class JSGenerator {
             int queryIdx = filename.indexOf('?');
             if (queryIdx >= 0) filename = filename.substring(0, queryIdx);
 
-            int available = totalBudget - used;
-            String content = source.length() > available
-                    ? source.substring(0, available) + "\n// [truncated by Forja]"
-                    : source;
-
             sb.append("### ").append(filename).append("\n");
             sb.append("// Source: ").append(url).append("\n");
             sb.append("```javascript\n");
-            sb.append(content).append("\n");
+            sb.append(source).append("\n");
             sb.append("```\n\n");
-
-            used += content.length();
         }
     }
 

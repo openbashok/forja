@@ -88,7 +88,8 @@ public class ToolkitGenerator {
      */
     public GeneratedTool generateFromPrompt(AppModel appModel, List<Finding> findings,
                                              String userPrompt) throws LLMException {
-        ContextBuilder contextBuilder = new ContextBuilder(6000);
+        // Full context — no budget limit
+        ContextBuilder contextBuilder = new ContextBuilder(Integer.MAX_VALUE);
         String appContext = contextBuilder.buildContext(appModel);
 
         StringBuilder prompt = new StringBuilder();
@@ -105,7 +106,28 @@ public class ToolkitGenerator {
                 if (!f.getAffectedEndpoints().isEmpty()) {
                     prompt.append(" (").append(String.join(", ", f.getAffectedEndpoints())).append(")");
                 }
+                if (!f.getEvidence().isEmpty()) {
+                    prompt.append("\n  Evidence: ").append(f.getEvidence());
+                }
                 prompt.append("\n");
+            }
+        }
+
+        // Include JavaScript sources
+        var jsSources = appModel.getJsSources();
+        if (!jsSources.isEmpty()) {
+            prompt.append("\n## Application JavaScript Source Code (").append(jsSources.size()).append(" files)\n\n");
+            for (var entry : jsSources.entrySet()) {
+                String url = entry.getKey();
+                String filename = url;
+                int lastSlash = url.lastIndexOf('/');
+                if (lastSlash >= 0) filename = url.substring(lastSlash + 1);
+                int queryIdx = filename.indexOf('?');
+                if (queryIdx >= 0) filename = filename.substring(0, queryIdx);
+
+                prompt.append("### ").append(filename).append("\n");
+                prompt.append("// Source: ").append(url).append("\n");
+                prompt.append("```javascript\n").append(entry.getValue()).append("\n```\n\n");
             }
         }
 

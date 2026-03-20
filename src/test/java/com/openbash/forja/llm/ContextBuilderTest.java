@@ -49,7 +49,7 @@ class ContextBuilderTest {
     }
 
     @Test
-    void buildContext_respectsTokenBudget() {
+    void buildContext_includesAllEndpoints() {
         AppModel model = new AppModel();
         for (int i = 0; i < 100; i++) {
             EndpointInfo ep = model.addOrUpdate("GET", "/path" + i, "/path" + i);
@@ -57,9 +57,12 @@ class ContextBuilderTest {
             ep.setSampleResponse("HTTP/1.1 200 OK\n" + "Y".repeat(200));
         }
 
-        ContextBuilder builder = new ContextBuilder(500); // Very small budget
+        ContextBuilder builder = new ContextBuilder(Integer.MAX_VALUE);
         String context = builder.buildContext(model);
-        assertTrue(context.contains("[... truncated to fit token budget ...]"));
+        // All 100 endpoints should be present — no truncation
+        assertFalse(context.contains("truncated"));
+        assertTrue(context.contains("/path0"));
+        assertTrue(context.contains("/path99"));
     }
 
     @Test

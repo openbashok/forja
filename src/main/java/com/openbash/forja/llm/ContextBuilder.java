@@ -1,6 +1,7 @@
 package com.openbash.forja.llm;
 
 import com.openbash.forja.traffic.AppModel;
+import com.openbash.forja.traffic.CryptoDetector;
 import com.openbash.forja.traffic.EndpointInfo;
 import com.openbash.forja.util.TokenEstimator;
 
@@ -39,12 +40,23 @@ public class ContextBuilder {
             appModel.getInterestingPatterns().forEach(p -> sb.append("- ").append(p).append("\n"));
         }
 
+        // Crypto findings
+        var cryptoFindings = appModel.getCryptoFindings();
+        if (!cryptoFindings.isEmpty()) {
+            sb.append("\n## Detected Cryptographic Patterns\n\n");
+            for (CryptoDetector.CryptoFinding cf : cryptoFindings) {
+                sb.append("- [").append(cf.getType()).append("] ").append(cf.getDescription()).append("\n");
+                sb.append("  URL: ").append(cf.getUrl()).append("\n");
+                sb.append("  Sample: ").append(cf.getSample()).append("\n");
+            }
+        }
+
         // JavaScript sources summary
         if (!appModel.getJsSources().isEmpty()) {
             sb.append("\nJavaScript files captured: ").append(appModel.getJsSources().size()).append("\n");
         }
 
-        // Endpoints prioritized: auth > params > frequency
+        // ALL endpoints — prioritized by auth > params > frequency, no truncation
         sb.append("\n## Endpoints\n\n");
         List<EndpointInfo> endpoints = new ArrayList<>(appModel.getEndpoints().values());
         endpoints.sort(Comparator
@@ -53,11 +65,6 @@ public class ContextBuilder {
                 .thenComparing(e -> -e.getTimesSeen()));
 
         for (EndpointInfo ep : endpoints) {
-            if (TokenEstimator.estimateTokens(sb.toString()) >= maxTokenBudget) {
-                sb.append("\n[... truncated to fit token budget ...]\n");
-                break;
-            }
-
             sb.append("### ").append(ep.getMethod()).append(" ").append(ep.getPathPattern()).append("\n");
             sb.append("Seen: ").append(ep.getTimesSeen()).append(" | ");
             sb.append("Codes: ").append(ep.getResponseCodes()).append(" | ");

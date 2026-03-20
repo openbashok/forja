@@ -21,7 +21,7 @@ public class SecurityAnalyzer {
         this.provider = provider;
         this.config = config;
         this.promptManager = promptManager;
-        this.contextBuilder = new ContextBuilder(8000);
+        this.contextBuilder = new ContextBuilder(Integer.MAX_VALUE);
     }
 
     public List<Finding> analyze(AppModel appModel) throws LLMException {
