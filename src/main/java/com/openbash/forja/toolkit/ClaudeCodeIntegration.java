@@ -93,7 +93,6 @@ public class ClaudeCodeIntegration {
         outputCallback.accept("[Forja] Launching: claude -p ...");
         outputCallback.accept("[Forja] Working directory: " + workDir);
         outputCallback.accept("[Forja] Budget: $" + budget);
-        outputCallback.accept("[Forja] Claude Code uses its own authentication (not Forja's API key)");
         outputCallback.accept("");
 
         // 6. Launch process
@@ -101,9 +100,12 @@ public class ClaudeCodeIntegration {
         pb.directory(workDir.toFile());
         pb.redirectErrorStream(false);
 
-        // Claude Code uses its own auth — don't inject Forja's API key
-        // Only set max output tokens for larger generations
+        // Pass Forja's API key so Claude Code authenticates with the same key
         Map<String, String> env = pb.environment();
+        String apiKey = config.getApiKey();
+        if (apiKey != null && !apiKey.isEmpty()) {
+            env.put("ANTHROPIC_API_KEY", apiKey);
+        }
         env.put("CLAUDE_CODE_MAX_OUTPUT_TOKENS", "128000");
 
         Process proc = pb.start();
