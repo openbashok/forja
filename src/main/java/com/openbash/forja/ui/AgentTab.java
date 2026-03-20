@@ -49,6 +49,14 @@ public class AgentTab extends JPanel {
     // Output directory for auto-saving generated files (mutable, persisted in config)
     private Path outputDir;
 
+    // Interactive shell
+    private volatile Process runningProcess;
+    private volatile java.io.OutputStream processStdin;
+    private JPanel shellInputPanel;
+    private JTextField shellInput;
+    private JButton shellSendBtn;
+    private JButton shellStopBtn;
+
     // Colors — shared from ForjaTheme
     private static final Color BG_DARK = ForjaTheme.BG_DARK;
     private static final Color BG_SIDEBAR = ForjaTheme.BG_SIDEBAR;
@@ -531,6 +539,65 @@ public class AgentTab extends JPanel {
         filesSplit.setBorder(BorderFactory.createEmptyBorder());
         panel.add(filesSplit, BorderLayout.CENTER);
 
+        // Bottom: shell input + action buttons
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setLayout(new BoxLayout(bottomPanel, BoxLayout.Y_AXIS));
+        bottomPanel.setBackground(BG_TOOLBAR);
+
+        // Shell input panel (hidden by default, shown when process is running)
+        shellInputPanel = new JPanel(new BorderLayout(4, 0));
+        shellInputPanel.setBackground(BG_TOOLBAR);
+        shellInputPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, BORDER_COLOR),
+                BorderFactory.createEmptyBorder(4, 8, 4, 8)
+        ));
+        shellInputPanel.setVisible(false);
+
+        JLabel shellLabel = new JLabel("stdin>");
+        shellLabel.setFont(CODE_FONT);
+        shellLabel.setForeground(ACCENT_GREEN);
+        shellInputPanel.add(shellLabel, BorderLayout.WEST);
+
+        shellInput = new JTextField();
+        shellInput.setFont(CODE_FONT);
+        shellInput.setBackground(BG_INPUT);
+        shellInput.setForeground(TEXT_CODE);
+        shellInput.setCaretColor(ACCENT_GREEN);
+        shellInput.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER_COLOR, 1),
+                BorderFactory.createEmptyBorder(2, 6, 2, 6)
+        ));
+        shellInput.addActionListener(e -> sendShellInput());
+        shellInputPanel.add(shellInput, BorderLayout.CENTER);
+
+        JPanel shellBtns = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        shellBtns.setOpaque(false);
+
+        shellSendBtn = new JButton("Send");
+        shellSendBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 10));
+        shellSendBtn.setForeground(Color.WHITE);
+        shellSendBtn.setBackground(ACCENT_GREEN);
+        shellSendBtn.setFocusPainted(false);
+        shellSendBtn.setBorderPainted(false);
+        shellSendBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        shellSendBtn.setMargin(new Insets(2, 8, 2, 8));
+        shellSendBtn.addActionListener(e -> sendShellInput());
+        shellBtns.add(shellSendBtn);
+
+        shellStopBtn = new JButton("Stop");
+        shellStopBtn.setFont(new Font(Font.DIALOG, Font.BOLD, 10));
+        shellStopBtn.setForeground(Color.WHITE);
+        shellStopBtn.setBackground(TEXT_ERROR);
+        shellStopBtn.setFocusPainted(false);
+        shellStopBtn.setBorderPainted(false);
+        shellStopBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        shellStopBtn.setMargin(new Insets(2, 8, 2, 8));
+        shellStopBtn.addActionListener(e -> stopRunningProcess());
+        shellBtns.add(shellStopBtn);
+
+        shellInputPanel.add(shellBtns, BorderLayout.EAST);
+        bottomPanel.add(shellInputPanel);
+
         // Action buttons
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 4));
         buttons.setBackground(BG_TOOLBAR);
@@ -562,7 +629,8 @@ public class AgentTab extends JPanel {
         openDirBtn.addActionListener(e -> openOutputDir());
         buttons.add(openDirBtn);
 
-        panel.add(buttons, BorderLayout.SOUTH);
+        bottomPanel.add(buttons);
+        panel.add(bottomPanel, BorderLayout.SOUTH);
         return panel;
     }
 
@@ -922,6 +990,9 @@ public class AgentTab extends JPanel {
     }
 
     private void runSelectedFile() {
+        // Stop any previously running process
+        stopRunningProcess();
+
         int idx = filesList.getSelectedIndex();
         if (idx < 0) {
             statusLabel.setText("Select a file first");
@@ -956,13 +1027,26 @@ public class AgentTab extends JPanel {
             filePath.toFile().setExecutable(true);
         }
 
-        // Build full command
-        String[] fullCmd = new String[command.length + 1];
-        System.arraycopy(command, 0, fullCmd, 0, command.length);
-        fullCmd[command.length] = filePath.toString();
+        // Build full command — use -u for unbuffered Python output
+        String[] fullCmd;
+        if ("python".equals(lang)) {
+            fullCmd = new String[command.length + 2];
+            System.arraycopy(command, 0, fullCmd, 0, command.length);
+            fullCmd[command.length] = "-u";
+            fullCmd[command.length + 1] = filePath.toString();
+        } else {
+            fullCmd = new String[command.length + 1];
+            System.arraycopy(command, 0, fullCmd, 0, command.length);
+            fullCmd[command.length] = filePath.toString();
+        }
 
         statusLabel.setText("Running " + filename + "...");
-        codeViewer.setText("[Run] $ " + String.join(" ", fullCmd) + "\n\n");
+        codeViewer.setText("[Run] $ " + String.join(" ", fullCmd) + "\n[Interactive shell — type input below, press Enter or Send]\n\n");
+
+        // Show interactive shell input
+        shellInputPanel.setVisible(true);
+        shellInput.setText("");
+        shellInput.requestFocusInWindow();
 
         new SwingWorker<String, String>() {
             @Override
@@ -972,6 +1056,9 @@ public class AgentTab extends JPanel {
                 pb.redirectErrorStream(true);
                 Process proc = pb.start();
 
+                runningProcess = proc;
+                processStdin = proc.getOutputStream();
+
                 try (var reader = new java.io.BufferedReader(
                         new java.io.InputStreamReader(proc.getInputStream()))) {
                     String line;
@@ -980,11 +1067,7 @@ public class AgentTab extends JPanel {
                     }
                 }
 
-                boolean finished = proc.waitFor(60, java.util.concurrent.TimeUnit.SECONDS);
-                if (!finished) {
-                    proc.destroyForcibly();
-                    return "\n[Timeout] Process killed after 60s";
-                }
+                proc.waitFor();
                 return "\n[Exit code: " + proc.exitValue() + "]";
             }
 
@@ -999,6 +1082,9 @@ public class AgentTab extends JPanel {
 
             @Override
             protected void done() {
+                runningProcess = null;
+                processStdin = null;
+                shellInputPanel.setVisible(false);
                 try {
                     String result = get();
                     codeViewer.append(result);
@@ -1010,6 +1096,35 @@ public class AgentTab extends JPanel {
                 }
             }
         }.execute();
+    }
+
+    private void sendShellInput() {
+        java.io.OutputStream stdin = processStdin;
+        if (stdin == null) return;
+        String text = shellInput.getText();
+        shellInput.setText("");
+        codeViewer.append(text + "\n");
+        codeViewer.setCaretPosition(codeViewer.getDocument().getLength());
+        new Thread(() -> {
+            try {
+                stdin.write((text + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                stdin.flush();
+            } catch (IOException ignored) {}
+        }, "shell-stdin-writer").start();
+    }
+
+    private void stopRunningProcess() {
+        Process proc = runningProcess;
+        if (proc != null && proc.isAlive()) {
+            proc.destroyForcibly();
+            SwingUtilities.invokeLater(() -> {
+                codeViewer.append("\n[Process stopped by user]");
+                statusLabel.setText("Process stopped");
+                shellInputPanel.setVisible(false);
+            });
+        }
+        runningProcess = null;
+        processStdin = null;
     }
 
     private static String[] resolveCommand(String language) {

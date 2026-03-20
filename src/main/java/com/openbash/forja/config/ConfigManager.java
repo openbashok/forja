@@ -93,7 +93,7 @@ public class ConfigManager {
 
     // Output directory for generated files
     public String getOutputDir() {
-        return getString("outputDir", System.getProperty("java.io.tmpdir") + "/forja-output");
+        return getString("outputDir", java.nio.file.Path.of(System.getProperty("java.io.tmpdir"), "forja-output").toString());
     }
 
     public void setOutputDir(String dir) {

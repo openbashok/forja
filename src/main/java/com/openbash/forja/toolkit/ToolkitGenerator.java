@@ -159,13 +159,56 @@ public class ToolkitGenerator {
             toolType = GeneratedTool.ToolType.JS_SCRIPT; // Python scripts, bash, etc.
         }
 
+        String name = extractName(content, description);
         return new GeneratedTool(
-                "Custom Tool",
+                name,
                 toolType,
                 description,
                 code,
                 language
         );
+    }
+
+    /**
+     * Extract a short tool name from the LLM response.
+     * Looks for a title/heading or derives from the description.
+     */
+    private String extractName(String content, String description) {
+        int codeStart = content.indexOf("```");
+        if (codeStart > 0) {
+            String before = content.substring(0, codeStart).trim();
+            String[] lines = before.split("\n");
+            for (String line : lines) {
+                String trimmed = line.trim();
+                // Look for markdown headings: # Title or ## Title
+                if (trimmed.startsWith("#")) {
+                    String heading = trimmed.replaceFirst("^#+\\s*", "").trim();
+                    if (!heading.isEmpty() && heading.length() <= 80) return heading;
+                }
+                // Look for "Title: ..." or "Tool Name: ..." patterns
+                if (trimmed.matches("(?i)(tool\\s*name|name|title)\\s*:.*")) {
+                    String val = trimmed.substring(trimmed.indexOf(':') + 1).trim();
+                    if (!val.isEmpty() && val.length() <= 80) return val;
+                }
+            }
+        }
+
+        // Derive from description: take first sentence, cap at 60 chars
+        if (description != null && !description.isEmpty() && !description.equals("Custom generated tool")) {
+            String name = description;
+            // Remove leading markers like "**Title**" markdown bold
+            name = name.replaceAll("\\*\\*", "").trim();
+            // Truncate at first period or dash
+            int dot = name.indexOf(". ");
+            if (dot > 0 && dot < 60) name = name.substring(0, dot);
+            int dash = name.indexOf(" — ");
+            if (dash > 0 && dash < 60) name = name.substring(0, dash);
+            int hyphen = name.indexOf(" - ");
+            if (hyphen > 0 && hyphen < 60) name = name.substring(0, hyphen);
+            if (name.length() > 60) name = name.substring(0, 57) + "...";
+            return name;
+        }
+        return "Generated Tool";
     }
 
     private String extractCode(String content) {
